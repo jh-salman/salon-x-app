@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import { isSameDay, format, addDays, subDays, addWeeks } from 'date-fns';
 import CalendarHeaderDynamic, { type ViewMode } from '../components/CalendarHeaderDynamic';
 import { RightDecoration } from '../components/RightDecoration';
-import { AllDaySection, type ParkZoneBounds, type CalendarLayout } from '../components/AllDaySection';
+import { AllDaySection, type ParkZoneBounds, type CalendarLayout, type UnparkDragGhost } from '../components/AllDaySection';
 import CalendarMiddleSection, { type Appointment, type AllDayAppointment, type CalendarMiddleSectionRef } from '../components/CalendarMiddleSection';
 import CalendarWeekView, { type CalendarWeekViewRef } from '../components/CalendarWeekView';
 import CalendarMonthView from '../components/CalendarMonthView';
@@ -67,6 +67,7 @@ export function CalendarScreen() {
   const [selectedRescheduleWeeks, setSelectedRescheduleWeeks] = useState(1);
   const [repeatAppointments, setRepeatAppointments] = useState(1);
   const [conflictResolution, setConflictResolution] = useState<ConflictResolutionState | null>(null);
+  const [unparkDragGhost, setUnparkDragGhost] = useState<UnparkDragGhost | null>(null);
 
   const swipeSlideAnim = useRef(new Animated.Value(0)).current;
   const weekSlideAnim = useRef(new Animated.Value(0)).current;
@@ -131,24 +132,25 @@ export function CalendarScreen() {
     [events, currentDate]
   );
 
-  /** Day toolbar = parked (global) + current day all-day/waitlist that are not parked */
+  /** Fixed toolbar for day view: all parked + all waitlist (any date); user can park/unpark from/to any date */
   const dayToolbarEvents = useMemo(() => {
-    const dayOnly = events.filter(
-      (e) =>
-        isSameDay(e.start, currentDate) &&
-        !e.isParked &&
-        (e.allDay === true || e.waitlistAddedAt != null)
-    );
-    const dayMapped = dayOnly.map((e) => ({
-      id: e.id,
-      title: e.title,
-      color: e.color,
-      isParked: false,
-      waitlistAddedAt: e.waitlistAddedAt,
-      service: e.service || e.clientName || undefined,
-    }));
-    return [...parkedEvents, ...dayMapped];
-  }, [events, currentDate, parkedEvents]);
+    const waitlist = events
+      .filter((e) => !e.isParked && (e.allDay === true || e.waitlistAddedAt != null))
+      .sort((a, b) => {
+        const ta = a.waitlistAddedAt == null ? 0 : typeof a.waitlistAddedAt === 'number' ? a.waitlistAddedAt : a.waitlistAddedAt.getTime();
+        const tb = b.waitlistAddedAt == null ? 0 : typeof b.waitlistAddedAt === 'number' ? b.waitlistAddedAt : b.waitlistAddedAt.getTime();
+        return ta - tb;
+      })
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        color: e.color,
+        isParked: false,
+        waitlistAddedAt: e.waitlistAddedAt,
+        service: e.service || e.clientName || undefined,
+      }));
+    return [...parkedEvents, ...waitlist];
+  }, [events, parkedEvents]);
 
   const currentTime = isToday ? liveTime.toDate() : dayjs(currentDate).toDate();
 
@@ -368,7 +370,7 @@ export function CalendarScreen() {
         />
         <RightDecoration date={currentDate} />
         {viewMode === 'day' && (
-          <Animated.View style={[styles.dayViewWrap, { transform: [{ translateX: swipeSlideAnim }] }]}>
+          <>
             <AllDaySection
               events={dayToolbarEvents}
               selectedDate={currentDate}
@@ -379,10 +381,13 @@ export function CalendarScreen() {
               onUnparkToSlot={handleMoveAppointment}
               onUnparkDragPosition={(y) => dayCalendarRef.current?.requestScrollWhenDragging(y)}
               onUnparkDragEnd={() => dayCalendarRef.current?.stopScrollWhenDragging()}
+              onUnparkDragGhost={setUnparkDragGhost}
             />
+            <Animated.View style={[styles.dayViewWrap, { transform: [{ translateX: swipeSlideAnim }] }]}>
             <CalendarMiddleSection
               ref={dayCalendarRef}
               onCalendarLayoutChange={setCalendarLayout}
+              externalUnparkDrag={unparkDragGhost}
               selectedDate={currentDate}
               appointments={appointments}
               allDayAppointments={[]}
@@ -421,12 +426,13 @@ export function CalendarScreen() {
                 }).start();
               }}
             />
-          </Animated.View>
+            </Animated.View>
+          </>
         )}
         {viewMode === 'week' && (
-          <Animated.View style={[styles.dayViewWrap, { transform: [{ translateX: weekSlideAnim }] }]}>
+          <>
             <AllDaySection
-              events={parkedEvents}
+              events={dayToolbarEvents}
               selectedDate={currentDate}
               onParkZoneMeasured={setParkZone}
               highlighted={false}
@@ -436,6 +442,7 @@ export function CalendarScreen() {
               onUnparkDragPosition={(y) => weekCalendarRef.current?.requestScrollWhenDragging(y)}
               onUnparkDragEnd={() => weekCalendarRef.current?.stopScrollWhenDragging()}
             />
+            <Animated.View style={[styles.dayViewWrap, { transform: [{ translateX: weekSlideAnim }] }]}>
             <CalendarWeekView
               ref={weekCalendarRef}
               selectedDate={currentDate}
@@ -482,7 +489,8 @@ export function CalendarScreen() {
               waitlistDays={[]}
               onWaitlistPress={() => setWaitlistModalVisible(true)}
             />
-          </Animated.View>
+            </Animated.View>
+          </>
         )}
         <EmptySlotActionModal
           visible={emptySlotModal !== null}

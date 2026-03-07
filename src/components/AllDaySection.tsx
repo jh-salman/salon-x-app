@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, Dimensions } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { ms, vs } from '../utils/responsive';
@@ -59,7 +59,11 @@ interface AllDaySectionProps {
   onUnparkDragPosition?: (screenY: number) => void;
   /** Called when unpark drag ends so calendar can stop auto-scroll */
   onUnparkDragEnd?: () => void;
+  /** When set, parent (e.g. CalendarMiddleSection) shows the same pointer/placement UI as move; pass ghost or null */
+  onUnparkDragGhost?: (ghost: UnparkDragGhost | null) => void;
 }
+
+export type UnparkDragGhost = { x: number; y: number; lineY?: number; dropTime?: string };
 
 function getWaitlistTime(ev: AllDayEvent): number {
   const t = ev.waitlistAddedAt;
@@ -395,6 +399,7 @@ export function AllDaySection({
   onUnparkToSlot,
   onUnparkDragPosition,
   onUnparkDragEnd,
+  onUnparkDragGhost,
 }: AllDaySectionProps) {
   const containerRef = useRef<View>(null);
   const [expandedParked, setExpandedParked] = useState(false);
@@ -407,6 +412,23 @@ export function AllDaySection({
     lineY?: number;
   } | null>(null);
   const [draggingFromExpanded, setDraggingFromExpanded] = useState(false);
+  const onUnparkDragGhostRef = useRef(onUnparkDragGhost);
+  onUnparkDragGhostRef.current = onUnparkDragGhost;
+
+  useEffect(() => {
+    const notify = onUnparkDragGhostRef.current;
+    if (!notify) return;
+    if (!dragGhost) {
+      notify(null);
+      return;
+    }
+    notify({
+      x: dragGhost.x,
+      y: dragGhost.y,
+      lineY: typeof dragGhost.lineY === 'number' ? dragGhost.lineY : undefined,
+      dropTime: dragGhost.dropTime,
+    });
+  }, [dragGhost]);
 
   const parked = events.filter((e) => e.isParked === true);
   const waiting = events.filter((e) => !e.isParked);
@@ -499,13 +521,16 @@ export function AllDaySection({
         )}
       </View>
 
+      {/* Expanded list modal – stay mounted during drag so gesture onEnd fires and drop works */}
       <Modal
         visible={expandedParked || expandedWaiting}
         transparent
         animationType="fade"
         onRequestClose={() => {
-          setExpandedParked(false);
-          setExpandedWaiting(false);
+          if (!draggingFromExpanded) {
+            setExpandedParked(false);
+            setExpandedWaiting(false);
+          }
         }}
       >
         <Pressable
@@ -518,7 +543,10 @@ export function AllDaySection({
           }}
         >
           <View
-            style={[styles.expandedPanel, { opacity: draggingFromExpanded ? 0 : 1 }, draggingFromExpanded && { pointerEvents: 'none' as const }]}
+            style={[
+              styles.expandedPanel,
+              draggingFromExpanded && { opacity: 0, pointerEvents: 'none' as const },
+            ]}
             onStartShouldSetResponder={() => !draggingFromExpanded}
           >
             <Text style={styles.expandedTitle}>{expandedParked ? 'Parked' : 'Waiting List'}</Text>
@@ -559,7 +587,8 @@ export function AllDaySection({
         </Pressable>
       </Modal>
 
-      {dragGhost && (
+      {/* Ghost Modal only when parent does not handle pointer (e.g. week view); day view uses calendar’s same pointer UI */}
+      {dragGhost && !onUnparkDragGhost && (
         <Modal visible transparent animationType="none" statusBarTranslucent>
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             {typeof dragGhost.lineY === 'number' && (

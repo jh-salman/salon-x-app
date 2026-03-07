@@ -1,9 +1,9 @@
-import React, { useMemo, useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useMemo, useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, PanResponder, Dimensions } from 'react-native';
 import { haptics } from '../utils/haptics';
 import { wp, hp, ms, vs } from '../utils/responsive';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
-import type { ParkZoneBounds, CalendarLayout } from './AllDaySection';
+import type { ParkZoneBounds, CalendarLayout, UnparkDragGhost } from './AllDaySection';
 import { GlassConfirmModal } from './GlassConfirmModal';
 import Svg, { Path, G, Circle, Ellipse, Defs, LinearGradient, Stop, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
 import { format } from 'date-fns';
@@ -12,6 +12,8 @@ import { colors as themeColors } from '../theme';
 const ORB_SIZE = 24;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PLACEMENT_LINE_MARGIN = wp(6);
+/** Match hour/grid line: same left as styles.gridLine so placement line aligns with calendar hour lines */
+const PLACEMENT_LINE_LEFT = ms(40);
 
 export interface Appointment {
   id: string;
@@ -62,6 +64,8 @@ interface CalendarMiddleSectionProps {
   onHorizontalSwipeMove?: (translationX: number) => void;
   /** Day view: released before half-width – snap back, no date change */
   onHorizontalSwipeCancel?: () => void;
+  /** Unpark drag from AllDaySection: show same pointer/placement UI as move (screen coords) */
+  externalUnparkDrag?: UnparkDragGhost | null;
 }
 
 export interface CalendarMiddleSectionRef {
@@ -765,8 +769,9 @@ function CalendarMiddleSectionInner(
     parentScrollY = 0,
     onHorizontalSwipe,
     onHorizontalSwipeMove,
-    onHorizontalSwipeCancel,
-  }: CalendarMiddleSectionProps,
+  onHorizontalSwipeCancel,
+  externalUnparkDrag,
+}: CalendarMiddleSectionProps,
   ref: React.Ref<CalendarMiddleSectionRef>
 ) {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -808,43 +813,48 @@ function CalendarMiddleSectionInner(
     []
   );
 
+  const requestScrollWhenDragging = useCallback(
+    (screenY: number) => {
+      if (isWeekColumn) return;
+      const top = calendarTopRef.current;
+      const height = scrollViewHeightRef.current;
+      if (height <= 0) return;
+      const bottom = top + height;
+      const maxScrollY = Math.max(0, DAY_CONTENT_HEIGHT - height);
+
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+        autoScrollIntervalRef.current = null;
+      }
+
+      if (screenY < top + DRAG_EDGE_ZONE) {
+        autoScrollIntervalRef.current = setInterval(() => {
+          const sy = scrollYRef.current;
+          const next = Math.max(0, sy - DRAG_SCROLL_STEP);
+          if (next <= 0) stopScrollWhenDragging();
+          scrollYRef.current = next;
+          scrollViewRef.current?.scrollTo({ y: next, animated: false });
+        }, DRAG_SCROLL_INTERVAL_MS);
+      } else if (screenY > bottom - DRAG_EDGE_ZONE) {
+        autoScrollIntervalRef.current = setInterval(() => {
+          const sy = scrollYRef.current;
+          const next = Math.min(maxScrollY, sy + DRAG_SCROLL_STEP);
+          if (next >= maxScrollY) stopScrollWhenDragging();
+          scrollYRef.current = next;
+          scrollViewRef.current?.scrollTo({ y: next, animated: false });
+        }, DRAG_SCROLL_INTERVAL_MS);
+      }
+    },
+    [isWeekColumn, stopScrollWhenDragging]
+  );
+
   useImperativeHandle(
     ref,
     () => ({
-      requestScrollWhenDragging(screenY: number) {
-        if (isWeekColumn) return;
-        const top = calendarTopRef.current;
-        const height = scrollViewHeightRef.current;
-        if (height <= 0) return;
-        const bottom = top + height;
-        const maxScrollY = Math.max(0, DAY_CONTENT_HEIGHT - height);
-
-        if (autoScrollIntervalRef.current) {
-          clearInterval(autoScrollIntervalRef.current);
-          autoScrollIntervalRef.current = null;
-        }
-
-        if (screenY < top + DRAG_EDGE_ZONE) {
-          autoScrollIntervalRef.current = setInterval(() => {
-            const sy = scrollYRef.current;
-            const next = Math.max(0, sy - DRAG_SCROLL_STEP);
-            if (next <= 0) stopScrollWhenDragging();
-            scrollYRef.current = next;
-            scrollViewRef.current?.scrollTo({ y: next, animated: false });
-          }, DRAG_SCROLL_INTERVAL_MS);
-        } else if (screenY > bottom - DRAG_EDGE_ZONE) {
-          autoScrollIntervalRef.current = setInterval(() => {
-            const sy = scrollYRef.current;
-            const next = Math.min(maxScrollY, sy + DRAG_SCROLL_STEP);
-            if (next >= maxScrollY) stopScrollWhenDragging();
-            scrollYRef.current = next;
-            scrollViewRef.current?.scrollTo({ y: next, animated: false });
-          }, DRAG_SCROLL_INTERVAL_MS);
-        }
-      },
+      requestScrollWhenDragging,
       stopScrollWhenDragging,
     }),
-    [isWeekColumn, stopScrollWhenDragging]
+    [requestScrollWhenDragging, stopScrollWhenDragging]
   );
 
   const horizontalSwipeGesture = useMemo(
@@ -1029,6 +1039,7 @@ function CalendarMiddleSectionInner(
 
   const handleDragMove = (x: number, y: number) => {
     setDragPosition({ x, y });
+    if (draggedAppointment) requestScrollWhenDragging(y);
     const inParkZone = parkZone && y >= parkZone.top && y <= parkZone.bottom;
     onDragOverParkZone?.(!!inParkZone);
 
@@ -1060,12 +1071,14 @@ function CalendarMiddleSectionInner(
   };
 
   const handleDragCancel = () => {
+    stopScrollWhenDragging();
     setDraggedAppointment(null);
     setDropPreview(null);
     onDragOverParkZone?.(false);
   };
 
   const handleDragEnd = (dropX: number, dropY: number) => {
+    stopScrollWhenDragging();
     const apt = draggedAppointment;
     setDraggedAppointment(null);
     setDropPreview(null);
@@ -1149,6 +1162,7 @@ function CalendarMiddleSectionInner(
         style={styles.scrollView}
         onLayout={(e) => {
           scrollViewHeightRef.current = e.nativeEvent.layout.height;
+          measureCalendar();
         }}
       >
       {isWeekColumn ? (
@@ -1183,8 +1197,8 @@ function CalendarMiddleSectionInner(
                 styles.dragPlacementLine,
                 {
                   top: placementLineY - 1,
-                  left: PLACEMENT_LINE_MARGIN,
-                  width: SCREEN_WIDTH - PLACEMENT_LINE_MARGIN * 2,
+                  left: PLACEMENT_LINE_LEFT,
+                  right: 0,
                 },
               ]}
             />
@@ -1212,6 +1226,47 @@ function CalendarMiddleSectionInner(
               <Text style={styles.dragTimeLabelText}>
                 {format(dropPreview.startTime, 'h:mm a')}
               </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Same pointer/placement UI for unpark drag from Parked/Waitlist (move-style touch feedback) */}
+      {externalUnparkDrag && !draggedAppointment && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {typeof externalUnparkDrag.lineY === 'number' && (
+            <View
+              style={[
+                styles.dragPlacementLine,
+                {
+                  top: externalUnparkDrag.lineY - containerTopRef.current - 1,
+                  left: PLACEMENT_LINE_LEFT,
+                  right: 0,
+                },
+              ]}
+            />
+          )}
+          <View
+            style={[
+              styles.dragOrb,
+              {
+                left: externalUnparkDrag.x - containerLeftRef.current - ORB_SIZE / 2,
+                top: externalUnparkDrag.y - containerTopRef.current - ORB_SIZE / 2,
+                backgroundColor: themeColors.highlight.neonPink,
+              },
+            ]}
+          />
+          {externalUnparkDrag.dropTime && (
+            <View
+              style={[
+                styles.dragTimeLabel,
+                {
+                  left: externalUnparkDrag.x - containerLeftRef.current + ORB_SIZE / 2 + 8,
+                  top: externalUnparkDrag.y - containerTopRef.current - 10,
+                },
+              ]}
+            >
+              <Text style={styles.dragTimeLabelText}>{externalUnparkDrag.dropTime}</Text>
             </View>
           )}
         </View>

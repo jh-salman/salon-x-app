@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CalendarEvent } from '../data/events';
 import { MOCK_EVENTS } from '../data/events';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 const STORAGE_KEY = '@calendar_events';
 
@@ -70,7 +71,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <EventsContext.Provider value={{ events, setEvents, addEvent }}>
-      {children}
+      {hydrated ? children : <LoadingScreen />}
     </EventsContext.Provider>
   );
 }
