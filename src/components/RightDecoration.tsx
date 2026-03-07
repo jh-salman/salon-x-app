@@ -1,11 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
+import { ms, vs } from '../utils/responsive';
 import { RFValue } from 'react-native-responsive-fontsize';
 import Svg, { Path } from 'react-native-svg';
 import { format } from 'date-fns';
-import { router } from 'expo-router';
 import { HalfCurvedLine } from './HalfCurvedLine';
 
 const svgPaths = {
@@ -15,19 +14,15 @@ const svgPaths = {
 const RightDateDisplay = () => {
   const currentDate = new Date();
   return (
-    <Pressable
-      style={styles.rightDateContainer}
-      onPress={() => router.push('/calendar')}
-      accessibilityLabel="Go to calendar"
-    >
+    <View style={styles.rightDateContainer} pointerEvents="none">
       <Text style={styles.rightDateDay}>{format(currentDate, 'EEE')}</Text>
       <Text style={styles.rightDateNumber}>{format(currentDate, 'd')}</Text>
-    </Pressable>
+    </View>
   );
 };
 
 const BackgroundShape = () => (
-  <View style={styles.backgroundShapeWrapper}>
+  <View style={styles.backgroundShapeWrapper} pointerEvents="none">
     <Svg width="76" height="203.5" viewBox="0 0 76 203.5" fill="none">
       <Path d={svgPaths.backgroundShape} fill="#01010C" />
     </Svg>
@@ -46,7 +41,7 @@ export const RightDecoration = ({ lineColors }: RightDecorationProps) => {
   return (
     <View style={styles.rightDecorationContainer} pointerEvents="box-none">
       <BackgroundShape />
-      <View style={[styles.halfCurvedLineAboveSafeArea, { top: -insets.top }]}>
+      <View style={[styles.halfCurvedLineAboveSafeArea, { top: -insets.top }]} pointerEvents="none">
         <HalfCurvedLine id="rightDecorationLine" colors={lineColors} />
       </View>
       <RightDateDisplay />
@@ -58,31 +53,31 @@ const styles = StyleSheet.create({
   rightDecorationContainer: {
     position: 'absolute',
     top: 0,
-    right: moderateScale(0),
-    width: moderateScale(78),
-    height: verticalScale(201),
+    right: ms(0),
+    width: ms(78),
+    height: vs(201),
     zIndex: 10,
   },
   backgroundShapeWrapper: {
     position: 'absolute',
-    right: moderateScale(0),
-    top: verticalScale(-30),
-    width: moderateScale(76),
-    height: verticalScale(203.5),
+    right: ms(0),
+    top: vs(-30),
+    width: ms(76),
+    height: vs(203.5),
   },
   halfCurvedLineAboveSafeArea: {
     position: 'absolute',
     left: 0,
-    width: moderateScale(145),
-    height: verticalScale(265),
+    width: ms(145),
+    height: vs(265),
     zIndex: 1,
   },
   rightDateContainer: {
     position: 'absolute',
-    top: verticalScale(-10),
-    right: moderateScale(2),
+    top: vs(0),
+    right: ms(15),
     alignItems: 'flex-end',
-    width: moderateScale(43),
+    width: ms(43),
     // backgroundColor: 'red',
 
   },
@@ -97,7 +92,7 @@ const styles = StyleSheet.create({
     fontSize: RFValue(20),
     color: 'white',
     textAlign: 'right',
-    marginTop: verticalScale(5),
+    marginTop: vs(5),
     fontWeight: 'bold',
   },
 });

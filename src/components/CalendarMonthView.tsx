@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions, Animated } from 'react-native';
+import { wp, hp, ms } from '../utils/responsive';
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, isToday } from 'date-fns';
 import type { CalendarEvent } from '../data/events';
 
@@ -20,7 +21,7 @@ function hexToDotColor(hex?: string): string {
   return '#8e8e93';
 }
 
-const PANEL_MAX_HEIGHT = 220;
+const PANEL_MAX_HEIGHT = hp(27);
 
 export default function CalendarMonthView({ selectedDate, events, onDateSelect, selectedDayEvents = [] }: CalendarMonthViewProps) {
   const { width: screenWidth } = useWindowDimensions();
@@ -29,10 +30,10 @@ export default function CalendarMonthView({ selectedDate, events, onDateSelect, 
 
   const monthStart = useMemo(() => startOfMonth(selectedDate), [selectedDate]);
   const monthEnd = useMemo(() => endOfMonth(selectedDate), [selectedDate]);
-  const start = useMemo(() => startOfWeek(monthStart, { weekStartsOn: 1 }), [monthStart]);
-  const end = useMemo(() => endOfWeek(monthEnd, { weekStartsOn: 1 }), [monthEnd]);
+  const start = useMemo(() => startOfWeek(monthStart, { weekStartsOn: 0 }), [monthStart]);
+  const end = useMemo(() => endOfWeek(monthEnd, { weekStartsOn: 0 }), [monthEnd]);
 
-  const cellSize = useMemo(() => Math.floor((screenWidth - 24) / 7), [screenWidth]);
+  const cellSize = useMemo(() => Math.floor((screenWidth - wp(6)) / 7), [screenWidth]);
 
   useEffect(() => {
     const hasEvents = selectedDayEvents.length > 0;
@@ -72,7 +73,7 @@ export default function CalendarMonthView({ selectedDate, events, onDateSelect, 
     return map;
   }, [events]);
 
-  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hasSelectedEvents = selectedDayEvents.length > 0;
 
   return (

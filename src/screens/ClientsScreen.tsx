@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { router } from 'expo-router';
 import { MOCK_CLIENTS } from '../data/clients';
 import type { ClientSummary } from '../data/clients';
+import { wp, hp, ms } from '../utils/responsive';
 
 function ClientRow({ item }: { item: ClientSummary }) {
   return (
@@ -50,84 +51,77 @@ export function ClientsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#111',
-  },
+  container: { flex: 1, backgroundColor: '#111' },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: wp(5),
+    paddingTop: hp(2),
+    paddingBottom: hp(3),
   },
   title: {
     fontFamily: 'Lato_700Bold',
-    fontSize: 28,
+    fontSize: ms(28),
     color: 'white',
-    marginBottom: 4,
+    marginBottom: hp(0.5),
   },
   subtitle: {
     fontFamily: 'Lato_400Regular',
-    fontSize: 14,
+    fontSize: ms(14),
     color: '#AAA',
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingHorizontal: wp(5),
+    paddingBottom: hp(12),
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
+    paddingVertical: hp(2),
+    paddingHorizontal: ms(4),
   },
-  rowPressed: {
-    opacity: 0.7,
-  },
+  rowPressed: { opacity: 0.7 },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: ms(48),
+    height: ms(48),
+    borderRadius: ms(24),
     backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: wp(4),
   },
   avatarText: {
     fontFamily: 'Lato_700Bold',
-    fontSize: 18,
+    fontSize: ms(18),
     color: 'white',
   },
-  rowContent: {
-    flex: 1,
-  },
+  rowContent: { flex: 1 },
   clientName: {
     fontFamily: 'Lato_700Bold',
-    fontSize: 16,
+    fontSize: ms(16),
     color: 'white',
-    marginBottom: 2,
+    marginBottom: hp(0.25),
   },
   lastVisit: {
     fontFamily: 'Lato_400Regular',
-    fontSize: 12,
+    fontSize: ms(12),
     color: '#AAA',
   },
   chevron: {
     fontFamily: 'Lato_400Regular',
-    fontSize: 24,
+    fontSize: ms(24),
     color: '#666',
   },
   separator: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    marginLeft: 64,
+    marginLeft: ms(64),
   },
   empty: {
-    paddingVertical: 48,
+    paddingVertical: hp(6),
     alignItems: 'center',
   },
   emptyText: {
     fontFamily: 'Lato_400Regular',
-    fontSize: 16,
+    fontSize: ms(16),
     color: '#666',
   },
 });

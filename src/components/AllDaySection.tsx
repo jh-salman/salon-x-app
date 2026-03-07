@@ -1,11 +1,13 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
+import React, { useRef, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, Dimensions } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
+import { ms, vs } from '../utils/responsive';
 import { RFValue } from 'react-native-responsive-fontsize';
 import Svg, { Rect } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { format } from 'date-fns';
 import { colors } from '../theme';
+import { haptics } from '../utils/haptics';
 
 const ORB_SIZE = 24;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -14,6 +16,9 @@ const PLACEMENT_LINE_MARGIN = 24;
 const MULTIPLE_THRESHOLD = 2;
 const SLOT_HEIGHT = 56;
 const SLOT_MINUTE_GRANULARITY = 5;
+/** Must match CalendarMiddleSection so drop position aligns with calendar y-axis */
+const DAY_START_HOUR = 6;
+const DAY_END_HOUR = 23;
 
 function snapMinutesTo5(min: number): number {
   return Math.min(55, Math.round(min / SLOT_MINUTE_GRANULARITY) * SLOT_MINUTE_GRANULARITY);
@@ -24,6 +29,10 @@ interface AllDayEvent {
   title: string;
   color?: string;
   isParked?: boolean;
+  /** When added to waitlist (ms or Date); used for chronological order and display */
+  waitlistAddedAt?: number | Date;
+  /** What appointment/service they're waiting for (e.g. Color, Cut, Perm, Highlights) */
+  service?: string;
 }
 
 export interface ParkZoneBounds {
@@ -46,16 +55,30 @@ interface AllDaySectionProps {
   parkZone?: ParkZoneBounds | null;
   calendarLayout?: CalendarLayout | null;
   onUnparkToSlot?: (id: string, newStart: Date, newEnd: Date) => void;
+  /** Called during unpark drag with finger screenY so calendar can auto-scroll near edges */
+  onUnparkDragPosition?: (screenY: number) => void;
+  /** Called when unpark drag ends so calendar can stop auto-scroll */
+  onUnparkDragEnd?: () => void;
+}
+
+function getWaitlistTime(ev: AllDayEvent): number {
+  const t = ev.waitlistAddedAt;
+  if (t == null) return 0;
+  return typeof t === 'number' ? t : t.getTime();
 }
 
 function PillContent({ ev, isPark }: { ev: AllDayEvent; isPark: boolean }) {
-  const pillWidth = Math.max(88, Math.min(110, ev.title.length * 8 + 24));
-  const PILL_H = 22;
+  const showTimestamp = !isPark && ev.waitlistAddedAt != null;
+  const showService = !isPark && ev.service;
+  const ts = ev.waitlistAddedAt != null ? (typeof ev.waitlistAddedAt === 'number' ? new Date(ev.waitlistAddedAt) : ev.waitlistAddedAt) : null;
+  const pillWidth = Math.max(88, Math.min(170, ev.title.length * 8 + (showTimestamp ? 52 : 24) + (showService ? (ev.service?.length ?? 0) * 4 : 0)));
+  const PILL_H = showService ? 28 : 22;
   const PILL_R = 8;
-  const fillColor = isPark ? colors.event.green : '#B87333';
+  const fillColor = isPark ? colors.parked.background : '#9DE684';
+  const strokeColor = isPark ? colors.parked.border : '#9DE684';
   return (
-    <View style={[styles.pillWrap, { minWidth: moderateScale(pillWidth), height: verticalScale(PILL_H) }]}>
-      <Svg width={moderateScale(pillWidth)} height={verticalScale(PILL_H)} viewBox={`0 0 ${pillWidth} ${PILL_H}`} fill="none" style={styles.pillSvg}>
+    <View style={[styles.pillWrap, { minWidth: ms(pillWidth), height: vs(PILL_H) }]}>
+      <Svg width={ms(pillWidth)} height={vs(PILL_H)} viewBox={`0 0 ${pillWidth} ${PILL_H}`} fill="none" style={styles.pillSvg}>
         <Rect
           x={0}
           y={0}
@@ -64,19 +87,29 @@ function PillContent({ ev, isPark }: { ev: AllDayEvent; isPark: boolean }) {
           rx={PILL_R}
           ry={PILL_R}
           fill={fillColor}
-          fillOpacity={isPark ? 0.4 : 0.35}
-          stroke={fillColor}
+          fillOpacity={isPark ? 1 : 0.35}
+          stroke={strokeColor}
         />
       </Svg>
       <View style={[StyleSheet.absoluteFillObject, styles.pillContent]}>
         {isPark ? (
-          <View style={[styles.verticalBar, { backgroundColor: colors.event.green }]} />
+          <View style={[styles.verticalBar, { backgroundColor: colors.parked.border }]} />
         ) : (
-          <View style={[styles.circleDot, { backgroundColor: '#B87333' }]} />
+          <View style={[styles.circleDot, { backgroundColor: '#9DE684' }]} />
         )}
-        <Text style={styles.pillText} numberOfLines={1}>
-          {ev.title}
-        </Text>
+        <View style={styles.pillTextCol}>
+          <View style={styles.pillTextRow}>
+            <Text style={styles.pillText} numberOfLines={1}>
+              {ev.title}
+            </Text>
+            {showTimestamp && ts && (
+              <Text style={styles.pillTimestamp} numberOfLines={1}>{format(ts, 'M/d  HH:mm')}</Text>
+            )}
+          </View>
+          {showService && (
+            <Text style={styles.pillService} numberOfLines={1}>{ev.service}</Text>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -92,6 +125,8 @@ function DraggablePill({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onUnparkDragPosition,
+  onUnparkDragEnd,
 }: {
   ev: AllDayEvent;
   isPark: boolean;
@@ -99,20 +134,28 @@ function DraggablePill({
   parkBottom: number;
   selectedDate: Date;
   onUnparkToSlot?: (id: string, newStart: Date, newEnd: Date) => void;
-  onDragStart?: (title: string) => void;
+  onDragStart?: (title: string, x?: number, y?: number) => void;
   onDragMove?: (x: number, y: number, dropPreview: { dropTime: string; lineY: number } | null) => void;
   onDragEnd?: () => void;
+  onUnparkDragPosition?: (screenY: number) => void;
+  onUnparkDragEnd?: () => void;
 }) {
   const longPressFiredRef = useRef(false);
+  const viewRef = useRef<View>(null);
 
   const longPress = Gesture.LongPress()
     .minDuration(400)
+    .runOnJS(true)
     .onStart(() => {
       longPressFiredRef.current = true;
-      onDragStart?.(ev.title);
+      haptics.medium();
+      viewRef.current?.measureInWindow((wx, wy, w, h) => {
+        onDragStart?.(ev.title, wx + w / 2, wy + h / 2);
+      });
     });
 
   const pan = Gesture.Pan()
+    .runOnJS(true)
     .onUpdate((e) => {
       if (!longPressFiredRef.current) return;
       const x = e.absoluteX;
@@ -122,27 +165,33 @@ function DraggablePill({
         const offsetFromTop = y - calendarLayout.top + calendarLayout.scrollY;
         const slotIndex = Math.max(0, Math.floor(offsetFromTop / SLOT_HEIGHT));
         const minutesInSlot = ((offsetFromTop % SLOT_HEIGHT) / SLOT_HEIGHT) * 60;
-        const hour = 8 + slotIndex;
+        const hour = Math.min(DAY_END_HOUR, DAY_START_HOUR + slotIndex);
         const newStart = new Date(selectedDate);
         newStart.setHours(hour, snapMinutesTo5(minutesInSlot), 0, 0);
-        const lineY = calendarLayout.top - calendarLayout.scrollY + slotIndex * SLOT_HEIGHT + (snapMinutesTo5(minutesInSlot) / 60) * SLOT_HEIGHT;
+        const clampedSlotIndex = hour - DAY_START_HOUR;
+        const lineY = calendarLayout.top - calendarLayout.scrollY + clampedSlotIndex * SLOT_HEIGHT + (snapMinutesTo5(minutesInSlot) / 60) * SLOT_HEIGHT;
         dropPreview = { dropTime: format(newStart, 'h:mm a'), lineY };
       }
       onDragMove?.(x, y, dropPreview);
+      onUnparkDragPosition?.(y);
     })
     .onEnd((e) => {
       if (longPressFiredRef.current) {
         longPressFiredRef.current = false;
+        onUnparkDragEnd?.();
         onDragEnd?.();
         const dropY = e.absoluteY;
         if (calendarLayout && onUnparkToSlot && dropY >= parkBottom && dropY >= calendarLayout.top - 20) {
           const offsetFromTop = dropY - calendarLayout.top + calendarLayout.scrollY;
           const slotIndex = Math.max(0, Math.floor(offsetFromTop / SLOT_HEIGHT));
           const minutesInSlot = ((offsetFromTop % SLOT_HEIGHT) / SLOT_HEIGHT) * 60;
-          const hour = 8 + slotIndex;
+          const hour = Math.min(DAY_END_HOUR, DAY_START_HOUR + slotIndex);
           const newStart = new Date(selectedDate);
           newStart.setHours(hour, snapMinutesTo5(minutesInSlot), 0, 0);
-          const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+          let newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+          const endOfLastSlot = new Date(selectedDate);
+          endOfLastSlot.setHours(DAY_END_HOUR, 59, 59, 999);
+          if (newEnd.getTime() > endOfLastSlot.getTime()) newEnd = endOfLastSlot;
           onUnparkToSlot(ev.id, newStart, newEnd);
         }
       }
@@ -152,7 +201,7 @@ function DraggablePill({
 
   return (
     <GestureDetector gesture={composed}>
-      <View>
+      <View ref={viewRef}>
         <PillContent ev={ev} isPark={isPark} />
       </View>
     </GestureDetector>
@@ -170,21 +219,22 @@ function NumberedButton({
   isPark: boolean;
   onPress: () => void;
 }) {
-  const fillColor = isPark ? colors.event.green : '#B87333';
+  const fillColor = isPark ? colors.parked.background : '#9DE684';
+  const strokeColor = isPark ? colors.parked.border : '#9DE684';
   const w = 80;
   const h = 22;
   const r = 8;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
-      <View style={[styles.pillWrap, { minWidth: moderateScale(w), height: verticalScale(h) }]}>
-        <Svg width={moderateScale(w)} height={verticalScale(h)} viewBox={`0 0 ${w} ${h}`} fill="none" style={styles.pillSvg}>
-          <Rect x={0} y={0} width={w} height={h} rx={r} ry={r} fill={fillColor} fillOpacity={isPark ? 0.4 : 0.35} stroke={fillColor} />
+      <View style={[styles.pillWrap, { minWidth: ms(w), height: vs(h) }]}>
+        <Svg width={ms(w)} height={vs(h)} viewBox={`0 0 ${w} ${h}`} fill="none" style={styles.pillSvg}>
+          <Rect x={0} y={0} width={w} height={h} rx={r} ry={r} fill={fillColor} fillOpacity={isPark ? 1 : 0.35} stroke={strokeColor} />
         </Svg>
         <View style={[StyleSheet.absoluteFillObject, styles.pillContent]}>
           {isPark ? (
-            <View style={[styles.verticalBar, { backgroundColor: colors.event.green }]} />
+            <View style={[styles.verticalBar, { backgroundColor: colors.parked.border }]} />
           ) : (
-            <View style={[styles.circleDot, { backgroundColor: '#B87333' }]} />
+            <View style={[styles.circleDot, { backgroundColor: '#9DE684' }]} />
           )}
           <Text style={styles.pillText}>
             {label} ({count})
@@ -206,6 +256,10 @@ function DraggableExpandedItem({
   onDragMove,
   onDragEnd,
   onCloseModal,
+  onDragStartFromExpanded,
+  onDragCancelFromExpanded,
+  onUnparkDragPosition,
+  onUnparkDragEnd,
 }: {
   ev: AllDayEvent;
   isPark: boolean;
@@ -213,21 +267,34 @@ function DraggableExpandedItem({
   parkBottom: number;
   selectedDate: Date;
   onUnparkToSlot?: (id: string, newStart: Date, newEnd: Date) => void;
-  onDragStart?: (title: string) => void;
+  onDragStart?: (title: string, x?: number, y?: number) => void;
   onDragMove?: (x: number, y: number, dropPreview: { dropTime: string; lineY: number } | null) => void;
   onDragEnd?: () => void;
   onCloseModal?: () => void;
+  /** When drag starts from expanded list, hide panel but keep mounted so gesture onEnd fires */
+  onDragStartFromExpanded?: () => void;
+  /** When drag ends outside calendar, popup will show again (via draggingFromExpanded false in onDragEnd) */
+  onDragCancelFromExpanded?: (isPark: boolean) => void;
+  onUnparkDragPosition?: (screenY: number) => void;
+  onUnparkDragEnd?: () => void;
 }) {
   const longPressFiredRef = useRef(false);
+  const viewRef = useRef<View>(null);
 
   const longPress = Gesture.LongPress()
     .minDuration(400)
+    .runOnJS(true)
     .onStart(() => {
       longPressFiredRef.current = true;
-      onDragStart?.(ev.title);
+      haptics.medium();
+      onDragStartFromExpanded?.();
+      viewRef.current?.measureInWindow((wx, wy, w, h) => {
+        onDragStart?.(ev.title, wx + w / 2, wy + h / 2);
+      });
     });
 
   const pan = Gesture.Pan()
+    .runOnJS(true)
     .onUpdate((e) => {
       if (!longPressFiredRef.current) return;
       const x = e.absoluteX;
@@ -237,42 +304,82 @@ function DraggableExpandedItem({
         const offsetFromTop = y - calendarLayout.top + calendarLayout.scrollY;
         const slotIndex = Math.max(0, Math.floor(offsetFromTop / SLOT_HEIGHT));
         const minutesInSlot = ((offsetFromTop % SLOT_HEIGHT) / SLOT_HEIGHT) * 60;
-        const hour = 8 + slotIndex;
+        const hour = Math.min(DAY_END_HOUR, DAY_START_HOUR + slotIndex);
         const newStart = new Date(selectedDate);
         newStart.setHours(hour, snapMinutesTo5(minutesInSlot), 0, 0);
-        const lineY = calendarLayout.top - calendarLayout.scrollY + slotIndex * SLOT_HEIGHT + (snapMinutesTo5(minutesInSlot) / 60) * SLOT_HEIGHT;
+        const clampedSlotIndex = hour - DAY_START_HOUR;
+        const lineY = calendarLayout.top - calendarLayout.scrollY + clampedSlotIndex * SLOT_HEIGHT + (snapMinutesTo5(minutesInSlot) / 60) * SLOT_HEIGHT;
         dropPreview = { dropTime: format(newStart, 'h:mm a'), lineY };
       }
       onDragMove?.(x, y, dropPreview);
+      onUnparkDragPosition?.(y);
     })
     .onEnd((e) => {
       if (longPressFiredRef.current) {
         longPressFiredRef.current = false;
+        onUnparkDragEnd?.();
         onDragEnd?.();
         const dropY = e.absoluteY;
-        if (calendarLayout && onUnparkToSlot) {
-          if (dropY >= parkBottom && dropY >= calendarLayout.top - 20) {
-            const offsetFromTop = dropY - calendarLayout.top + calendarLayout.scrollY;
+        const droppedInCalendar = calendarLayout && onUnparkToSlot && dropY >= parkBottom && dropY >= calendarLayout.top - 20;
+        if (droppedInCalendar) {
+            const offsetFromTop = dropY - calendarLayout!.top + calendarLayout!.scrollY;
             const slotIndex = Math.max(0, Math.floor(offsetFromTop / SLOT_HEIGHT));
             const minutesInSlot = ((offsetFromTop % SLOT_HEIGHT) / SLOT_HEIGHT) * 60;
-            const hour = 8 + slotIndex;
+            const hour = Math.min(DAY_END_HOUR, DAY_START_HOUR + slotIndex);
             const newStart = new Date(selectedDate);
             newStart.setHours(hour, snapMinutesTo5(minutesInSlot), 0, 0);
-            const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+            let newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+            const endOfLastSlot = new Date(selectedDate);
+            endOfLastSlot.setHours(DAY_END_HOUR, 59, 59, 999);
+            if (newEnd.getTime() > endOfLastSlot.getTime()) newEnd = endOfLastSlot;
             onUnparkToSlot(ev.id, newStart, newEnd);
             onCloseModal?.();
-          }
+        } else {
+          onDragCancelFromExpanded?.(isPark);
         }
       }
     });
 
   const composed = Gesture.Simultaneous(longPress, pan);
 
+  const waitlistTime = !isPark && ev.waitlistAddedAt != null
+    ? (typeof ev.waitlistAddedAt === 'number' ? new Date(ev.waitlistAddedAt) : ev.waitlistAddedAt)
+    : null;
+
+  if (!onUnparkToSlot) {
+    return (
+      <View style={styles.expandedItem}>
+        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.parked.border } : { backgroundColor: '#9DE684' }]} />
+        <View style={styles.expandedItemContent}>
+          <View style={styles.expandedItemTextRow}>
+            <Text style={styles.expandedItemText} numberOfLines={1}>{ev.title}</Text>
+            {waitlistTime && (
+              <Text style={styles.expandedItemTimestamp}>{format(waitlistTime, 'M/d  HH:mm')}</Text>
+            )}
+          </View>
+          {!isPark && ev.service && (
+            <Text style={styles.expandedItemService} numberOfLines={1}>Waiting for: {ev.service}</Text>
+          )}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <GestureDetector gesture={composed}>
-      <View style={styles.expandedItem}>
-        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.event.green } : { backgroundColor: '#B87333' }]} />
-        <Text style={styles.expandedItemText} numberOfLines={1}>{ev.title}</Text>
+      <View ref={viewRef} style={styles.expandedItem}>
+        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.parked.border } : { backgroundColor: '#9DE684' }]} />
+        <View style={styles.expandedItemContent}>
+          <View style={styles.expandedItemTextRow}>
+            <Text style={styles.expandedItemText} numberOfLines={1}>{ev.title}</Text>
+            {waitlistTime && (
+              <Text style={styles.expandedItemTimestamp}>{format(waitlistTime, 'M/d  HH:mm')}</Text>
+            )}
+          </View>
+          {!isPark && ev.service && (
+            <Text style={styles.expandedItemService} numberOfLines={1}>Waiting for: {ev.service}</Text>
+          )}
+        </View>
       </View>
     </GestureDetector>
   );
@@ -286,6 +393,8 @@ export function AllDaySection({
   parkZone = null,
   calendarLayout = null,
   onUnparkToSlot,
+  onUnparkDragPosition,
+  onUnparkDragEnd,
 }: AllDaySectionProps) {
   const containerRef = useRef<View>(null);
   const [expandedParked, setExpandedParked] = useState(false);
@@ -297,9 +406,14 @@ export function AllDaySection({
     dropTime?: string;
     lineY?: number;
   } | null>(null);
+  const [draggingFromExpanded, setDraggingFromExpanded] = useState(false);
 
   const parked = events.filter((e) => e.isParked === true);
   const waiting = events.filter((e) => !e.isParked);
+  const waitingSorted = useMemo(
+    () => [...waiting].sort((a, b) => getWaitlistTime(a) - getWaitlistTime(b)),
+    [waiting]
+  );
 
   const handleLayout = () => {
     containerRef.current?.measureInWindow((x, y, w, h) => {
@@ -323,7 +437,7 @@ export function AllDaySection({
   return (
     <>
       <View ref={containerRef} style={containerStyle} onLayout={handleLayout}>
-        {(parked.length > 0 || waiting.length > 0) && (
+        {(parked.length > 0 || waitingSorted.length > 0) && (
           <View style={styles.eventsRow}>
             {parked.length > 0 && (
               <View style={styles.buttonGroup}>
@@ -340,9 +454,11 @@ export function AllDaySection({
                         parkBottom={parkZone?.bottom ?? 200}
                         selectedDate={selectedDate}
                         onUnparkToSlot={onUnparkToSlot}
-                        onDragStart={(title) => setDragGhost({ x: 0, y: 0, title })}
+                        onDragStart={(title, x, y) => setDragGhost({ x: x ?? 0, y: y ?? 0, title })}
                         onDragMove={(x, y, dropPreview) => setDragGhost((p) => (p ? { ...p, x, y, dropTime: dropPreview?.dropTime, lineY: dropPreview?.lineY } : null))}
                         onDragEnd={() => setDragGhost(null)}
+                        onUnparkDragPosition={onUnparkDragPosition}
+                        onUnparkDragEnd={onUnparkDragEnd}
                       />
                     ) : (
                       <PillContent key={ev.id} ev={ev} isPark />
@@ -351,12 +467,12 @@ export function AllDaySection({
                 )}
               </View>
             )}
-            {waiting.length > 0 && (
+            {waitingSorted.length > 0 && (
               <View style={styles.buttonGroup}>
-                {waiting.length >= MULTIPLE_THRESHOLD ? (
-                  <NumberedButton label="Waiting" count={waiting.length} isPark={false} onPress={() => setExpandedWaiting(true)} />
+                {waitingSorted.length >= MULTIPLE_THRESHOLD ? (
+                  <NumberedButton label="Waiting" count={waitingSorted.length} isPark={false} onPress={() => setExpandedWaiting(true)} />
                 ) : (
-                  waiting.map((ev) =>
+                  waitingSorted.map((ev) =>
                     onUnparkToSlot ? (
                       <DraggablePill
                         key={ev.id}
@@ -366,9 +482,11 @@ export function AllDaySection({
                         parkBottom={parkZone?.bottom ?? 200}
                         selectedDate={selectedDate}
                         onUnparkToSlot={onUnparkToSlot}
-                        onDragStart={(title) => setDragGhost({ x: 0, y: 0, title })}
+                        onDragStart={(title, x, y) => setDragGhost({ x: x ?? 0, y: y ?? 0, title })}
                         onDragMove={(x, y, dropPreview) => setDragGhost((p) => (p ? { ...p, x, y, dropTime: dropPreview?.dropTime, lineY: dropPreview?.lineY } : null))}
                         onDragEnd={() => setDragGhost(null)}
+                        onUnparkDragPosition={onUnparkDragPosition}
+                        onUnparkDragEnd={onUnparkDragEnd}
                       />
                     ) : (
                       <PillContent key={ev.id} ev={ev} isPark={false} />
@@ -391,17 +509,26 @@ export function AllDaySection({
         }}
       >
         <Pressable
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, draggingFromExpanded && { opacity: 0, pointerEvents: 'none' as const }]}
           onPress={() => {
-            setExpandedParked(false);
-            setExpandedWaiting(false);
+            if (!draggingFromExpanded) {
+              setExpandedParked(false);
+              setExpandedWaiting(false);
+            }
           }}
         >
-          <View style={styles.expandedPanel} onStartShouldSetResponder={() => true}>
+          <View
+            style={[styles.expandedPanel, { opacity: draggingFromExpanded ? 0 : 1 }, draggingFromExpanded && { pointerEvents: 'none' as const }]}
+            onStartShouldSetResponder={() => !draggingFromExpanded}
+          >
             <Text style={styles.expandedTitle}>{expandedParked ? 'Parked' : 'Waiting List'}</Text>
-            <Text style={styles.expandedHint}>Long-press and drag to calendar</Text>
+            {onUnparkToSlot ? (
+              <Text style={styles.expandedHint}>Long-press and drag to calendar</Text>
+            ) : (
+              <Text style={styles.expandedHint}>Switch to Day view to move or place appointments</Text>
+            )}
             <ScrollView style={styles.expandedScroll} keyboardShouldPersistTaps="handled">
-              {(expandedParked ? parked : waiting).map((ev) => (
+              {(expandedParked ? parked : waitingSorted).map((ev) => (
                 <DraggableExpandedItem
                   key={ev.id}
                   ev={ev}
@@ -413,10 +540,18 @@ export function AllDaySection({
                   onCloseModal={() => {
                     setExpandedParked(false);
                     setExpandedWaiting(false);
+                    setDraggingFromExpanded(false);
                   }}
-                  onDragStart={(title) => setDragGhost({ x: 0, y: 0, title })}
+                  onDragStartFromExpanded={() => setDraggingFromExpanded(true)}
+                  onDragCancelFromExpanded={() => {}}
+                  onDragStart={(title, x, y) => setDragGhost({ x: x ?? 0, y: y ?? 0, title })}
                   onDragMove={(x, y, dropPreview) => setDragGhost((p) => (p ? { ...p, x, y, dropTime: dropPreview?.dropTime, lineY: dropPreview?.lineY } : null))}
-                  onDragEnd={() => setDragGhost(null)}
+                  onDragEnd={() => {
+                    setDragGhost(null);
+                    setDraggingFromExpanded(false);
+                  }}
+                  onUnparkDragPosition={onUnparkDragPosition}
+                  onUnparkDragEnd={onUnparkDragEnd}
                 />
               ))}
             </ScrollView>
@@ -470,27 +605,28 @@ export function AllDaySection({
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: verticalScale(32),
+    minHeight: vs(32),
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: moderateScale(12),
+    paddingHorizontal: ms(12),
     backgroundColor: 'rgba(17, 17, 17, 0.07)',
+    marginTop: -vs(10),
   },
   eventsRow: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
-    gap: moderateScale(12),
+    gap: ms(12),
   },
   buttonGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: moderateScale(8),
+    gap: ms(8),
   },
   pillWrap: {
     position: 'relative',
-    minWidth: moderateScale(88),
+    minWidth: ms(88),
   },
   pillSvg: {
     position: 'absolute',
@@ -498,65 +634,108 @@ const styles = StyleSheet.create({
   pillContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: moderateScale(12),
-    gap: moderateScale(8),
+    paddingLeft: ms(12),
+    gap: ms(8),
   },
   circleDot: {
-    width: moderateScale(8),
-    height: moderateScale(8),
-    borderRadius: moderateScale(4),
+    width: ms(8),
+    height: ms(8),
+    borderRadius: ms(4),
   },
   verticalBar: {
-    width: moderateScale(3),
-    height: verticalScale(16),
+    width: ms(3),
+    height: vs(16),
     borderRadius: 2,
+  },
+  pillTextCol: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  pillTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(4),
+    minWidth: 0,
   },
   pillText: {
     fontSize: RFValue(8),
     color: colors.text.primary,
     fontWeight: '700',
+    flex: 1,
+    minWidth: 0,
+  },
+  pillTimestamp: {
+    fontSize: RFValue(7),
+    color: colors.text.secondary || '#999',
+    fontWeight: '600',
+  },
+  pillService: {
+    fontSize: RFValue(7),
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-start',
-    paddingTop: moderateScale(60),
-    paddingHorizontal: moderateScale(16),
+    paddingTop: ms(60),
+    paddingHorizontal: ms(16),
   },
   expandedPanel: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
-    padding: moderateScale(16),
+    padding: ms(16),
     maxHeight: '60%',
   },
   expandedTitle: {
     fontSize: RFValue(16),
     color: colors.text.primary,
     fontWeight: '700',
-    marginBottom: moderateScale(4),
+    marginBottom: ms(4),
   },
   expandedHint: {
     fontSize: RFValue(10),
     color: colors.text.secondary || '#999',
-    marginBottom: moderateScale(12),
+    marginBottom: ms(12),
   },
   expandedScroll: {
-    maxHeight: verticalScale(240),
+    maxHeight: vs(240),
   },
   expandedItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: verticalScale(10),
-    paddingHorizontal: moderateScale(12),
+    paddingVertical: vs(10),
+    paddingHorizontal: ms(12),
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    marginBottom: moderateScale(8),
-    gap: moderateScale(8),
+    marginBottom: ms(8),
+    gap: ms(8),
+  },
+  expandedItemContent: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  expandedItemTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: ms(8),
+    minWidth: 0,
   },
   expandedItemText: {
     fontSize: RFValue(12),
     color: colors.text.primary,
     flex: 1,
+    minWidth: 0,
+  },
+  expandedItemTimestamp: {
+    fontSize: RFValue(11),
+    color: colors.text.secondary || '#999',
+  },
+  expandedItemService: {
+    fontSize: RFValue(10),
+    color: colors.text.secondary || '#999',
+    fontWeight: '600',
+    marginTop: 2,
   },
   placementLine: {
     position: 'absolute',

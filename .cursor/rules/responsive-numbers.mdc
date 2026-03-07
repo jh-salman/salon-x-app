@@ -1,0 +1,34 @@
+---
+description: Use responsive utils for all numeric layout/size values (no raw pixels)
+globs: "**/*.tsx,**/*.ts"
+alwaysApply: true
+---
+
+# Responsive numeric values
+
+When using **any numeric value** for layout, spacing, or size, always use the project's responsive utilities. Do **not** use raw pixel numbers (e.g. `5`, `44`, `-6`, `2`).
+
+## Import from `../utils/responsive` (or correct path)
+
+- **`ms(n)`** – horizontal spacing, widths, horizontal padding/margin, font sizes (moderateScale)
+- **`vs(n)`** – vertical spacing, heights, vertical padding/margin (verticalScale)
+- **`wp(n)`** – width as % of screen (widthPercentageToDP)
+- **`hp(n)`** – height as % of screen (heightPercentageToDP)
+- **`RFValue(n)`** – font sizes in styles (react-native-responsive-fontsize)
+
+## Do
+
+- `paddingLeft: ms(40)`  
+- `height: vs(44)`  
+- `marginTop: vs(-6)` or `marginTop: -ms(6)` for small offsets  
+- `fontSize: RFValue(14)`  
+- `width: wp(80)` for percentage-based width  
+
+## Don't
+
+- `paddingLeft: 40`  
+- `height: 44`  
+- `marginTop: -6`  
+- `fontSize: 14`  
+
+If you need a small offset (e.g. “5px left”), use `ms(5)` or `vs(5)` instead of raw `5`. For arithmetic, keep values responsive: e.g. `ms(40) - ms(5)` or define a constant like `const offset = ms(5)` and use it.

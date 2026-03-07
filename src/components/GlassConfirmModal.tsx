@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { RFValue } from 'react-native-responsive-fontsize';
-import { moderateScale } from 'react-native-size-matters';
 import { colors } from '../theme';
+import { wp, hp, ms } from '../utils/responsive';
 
 export type GlassModalMode = 'move' | 'resize' | 'notify_client' | 'cancel_appointment';
 
@@ -73,21 +73,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardWrapper: {
-    width: '85%',
-    maxWidth: 320,
-  },
+  cardWrapper: { width: '85%', maxWidth: wp(80) },
   glassCard: {
-    borderRadius: 20,
+    borderRadius: ms(20),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     backgroundColor: 'rgba(40,45,55,0.1)',
   },
-  cardInner: {
-    padding: moderateScale(24),
-    gap: moderateScale(16),
-  },
+  cardInner: { padding: wp(6), gap: hp(2) },
   primaryText: {
     fontSize: RFValue(22),
     fontWeight: '700',
@@ -99,17 +93,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text.secondary,
     textAlign: 'center',
-    marginTop: moderateScale(4),
+    marginTop: hp(0.5),
   },
   buttons: {
     flexDirection: 'row',
-    gap: moderateScale(12),
-    marginTop: moderateScale(16),
+    gap: ms(12),
+    marginTop: hp(2),
   },
   button: {
     flex: 1,
-    paddingVertical: moderateScale(14),
-    borderRadius: 12,
+    paddingVertical: hp(1.8),
+    borderRadius: ms(12),
     alignItems: 'center',
   },
   buttonNo: {
