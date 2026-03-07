@@ -7,19 +7,21 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useClients } from '../context/ClientsContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, G } from 'react-native-svg';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
+import { wp, hp, ms, vs } from '../utils/responsive';
 import { RFValue } from 'react-native-responsive-fontsize';
 import { format } from 'date-fns';
 import { colors } from '../theme';
 
 // Icons
 const BackIcon = () => (
-  <Svg width={moderateScale(15)} height={verticalScale(10)} viewBox="0 0 15.6059 10.1073">
+  <Svg width={ms(15)} height={vs(10)} viewBox="0 0 15.6059 10.1073">
     <G>
       <Path
         d="M4.74241 4.97939L8.48012 0.307264L4.11946 0.307263L0.381754 4.97939L4.11946 9.80726L8.48011 9.80726L4.74241 4.97939Z"
@@ -71,7 +73,7 @@ const EmailIcon = ({ size }: { size: number }) => (
 );
 
 const ChevronDownIcon = () => (
-  <Svg width={moderateScale(10)} height={verticalScale(5)} viewBox="0 0 10 5">
+  <Svg width={ms(10)} height={vs(5)} viewBox="0 0 10 5">
     <Path
       d="M1.53244 0.222096L5.00447 3.16819L8.47651 0.222096C8.8255 -0.0740319 9.38926 -0.0740319 9.73826 0.222096C10.0872 0.518223 10.0872 0.996583 9.73826 1.29271L5.63087 4.7779C5.28188 5.07403 4.71812 5.07403 4.36913 4.7779L0.261745 1.29271C-0.0872483 0.996583 -0.0872483 0.518223 0.261745 0.222096C0.610738 -0.0664389 1.18345 -0.0740319 1.53244 0.222096V0.222096Z"
       fill="#A3A3A3"
@@ -81,27 +83,41 @@ const ChevronDownIcon = () => (
 
 export function NewCustomerScreen() {
   const router = useRouter();
+  const { addClient } = useClients();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [birthday, setBirthday] = useState<Date | null>(null);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(false);
   const [birthdayInput, setBirthdayInput] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const handleSave = () => {
-    // TODO: Save customer to data store
-    router.back();
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    addClient({
+      name: name.trim(),
+      ...(birthday && { birthday: birthday.toISOString() }),
+    });
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        router.back();
+      }, 150);
+    });
   };
 
   const handleAddAnother = () => {
+    if (name.trim()) {
+      addClient({ name: name.trim() });
+    }
     setName('');
     setPhone('');
     setEmail('');
     setBirthday(null);
-    // TODO: Save current and reset for another
+    setBirthdayInput('');
   };
 
-  const iconSize = moderateScale(18);
+  const iconSize = ms(18);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -130,7 +146,7 @@ export function NewCustomerScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarPlaceholder}>
-              <PersonOutlineIcon size={moderateScale(48)} />
+              <PersonOutlineIcon size={ms(48)} />
             </View>
             <TouchableOpacity style={styles.addPhotoButton} activeOpacity={0.8}>
               <AddPhotoIcon />
@@ -195,9 +211,24 @@ export function NewCustomerScreen() {
 
         {/* Buttons */}
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity activeOpacity={0.8} onPress={handleSave}>
-            <LinearGradient colors={[colors.brand, colors.brand]} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>SAVE</Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handleSave}
+            disabled={saving}
+            style={saving ? styles.saveButtonDisabled : undefined}
+          >
+            <LinearGradient
+              colors={[colors.brand, colors.brand]}
+              style={[styles.saveButton, saving && styles.saveButtonLoading]}
+            >
+              {saving ? (
+                <>
+                  <ActivityIndicator color="#fff" size="small" style={styles.saveButtonSpinner} />
+                  <Text style={styles.saveButtonText}>SAVING...</Text>
+                </>
+              ) : (
+                <Text style={styles.saveButtonText}>SAVE</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
@@ -210,6 +241,16 @@ export function NewCustomerScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Saving overlay - stays until we navigate back and auto-select happens */}
+      <Modal visible={saving} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={colors.brand} size="large" />
+            <Text style={styles.loadingText}>Saving...</Text>
+          </View>
+        </View>
+      </Modal>
 
       {/* Birthday Date Picker Modal */}
       <Modal visible={showBirthdayPicker} transparent animationType="slide">
@@ -271,36 +312,36 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#000' },
   container: { flex: 1 },
   scrollView: { flex: 1 },
-  content: { paddingBottom: verticalScale(40) },
+  content: { paddingBottom: vs(40) },
   header: {
-    height: verticalScale(48),
+    height: vs(48),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: moderateScale(32),
+    paddingHorizontal: wp(8),
   },
-  backButton: { padding: moderateScale(4) },
+  backButton: { padding: ms(4) },
   headerTitle: {
     flex: 1,
     fontFamily: 'Lato_700Bold',
     fontSize: RFValue(16),
     color: '#FFFFFF',
     textAlign: 'center',
-    marginLeft: moderateScale(8),
+    marginLeft: ms(8),
   },
-  headerSpacer: { width: moderateScale(15) },
+  headerSpacer: { width: ms(15) },
   avatarSection: {
     alignItems: 'center',
-    marginTop: verticalScale(24),
-    marginBottom: verticalScale(24),
+    marginTop: hp(3),
+    marginBottom: vs(24),
   },
   avatarWrapper: {
     position: 'relative',
   },
   avatarPlaceholder: {
-    width: moderateScale(120),
-    height: moderateScale(120),
-    borderRadius: moderateScale(60),
+    width: ms(120),
+    height: ms(120),
+    borderRadius: ms(60),
     backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
@@ -309,9 +350,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    width: moderateScale(36),
-    height: moderateScale(36),
-    borderRadius: moderateScale(18),
+    width: ms(36),
+    height: ms(36),
+    borderRadius: ms(18),
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -329,26 +370,27 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   formContainer: {
-    paddingHorizontal: moderateScale(32),
-    gap: verticalScale(6),
+    paddingHorizontal: wp(8),
+    gap: hp(0.8),
   },
   inputField: {
-    minHeight: verticalScale(43),
-    backgroundColor: '#000108',
-    borderRadius: moderateScale(8),
-    borderWidth: 0.7,
-    borderColor: '#A3A3A3',
+    minHeight: vs(38),
+    backgroundColor: '#1a1a1a',
+    borderRadius: ms(8),
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(14),
-    gap: moderateScale(8),
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(0.9),
+    gap: ms(8),
   },
   inputText: {
     flex: 1,
     fontFamily: 'Lato_400Regular',
     fontSize: RFValue(14),
     color: '#FFFFFF',
+    padding: 0,
   },
   inputPlaceholder: {
     color: '#A3A3A3',
@@ -361,21 +403,31 @@ const styles = StyleSheet.create({
     fontSize: RFValue(12),
     color: '#A3A3A3',
     lineHeight: RFValue(18),
-    paddingHorizontal: moderateScale(32),
-    marginTop: verticalScale(16),
-    marginBottom: verticalScale(24),
+    paddingHorizontal: wp(8),
+    marginTop: vs(16),
+    marginBottom: vs(24),
   },
   buttonsContainer: {
-    paddingHorizontal: moderateScale(32),
-    gap: verticalScale(12),
+    paddingHorizontal: wp(8),
+    gap: hp(1.5),
   },
   saveButton: {
-    height: verticalScale(48),
-    borderRadius: moderateScale(24),
+    height: vs(42),
+    borderRadius: ms(21),
     borderWidth: 1.5,
     borderColor: '#0677B9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  saveButtonLoading: {
+    flexDirection: 'row',
+    gap: ms(8),
+  },
+  saveButtonSpinner: {
+    marginRight: 0,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
   },
   saveButtonText: {
     fontFamily: 'Lato_700Bold',
@@ -385,8 +437,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   secondaryButton: {
-    height: verticalScale(48),
-    borderRadius: moderateScale(24),
+    height: vs(42),
+    borderRadius: ms(21),
     borderWidth: 1.5,
     borderColor: 'rgba(200, 200, 200, 0.3)',
     backgroundColor: 'transparent',
@@ -407,16 +459,16 @@ const styles = StyleSheet.create({
   },
   datePickerContent: {
     backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: moderateScale(16),
-    borderTopRightRadius: moderateScale(16),
-    padding: moderateScale(24),
-    paddingBottom: verticalScale(40),
+    borderTopLeftRadius: ms(16),
+    borderTopRightRadius: ms(16),
+    padding: ms(24),
+    paddingBottom: vs(40),
   },
   datePickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(16),
+    marginBottom: vs(16),
   },
   datePickerCancel: {
     fontFamily: 'Lato_400Regular',
@@ -435,26 +487,26 @@ const styles = StyleSheet.create({
   },
   dateInputRow: {
     flexDirection: 'row',
-    gap: moderateScale(12),
+    gap: ms(12),
     alignItems: 'center',
   },
   dateInput: {
     flex: 1,
-    height: verticalScale(48),
-    backgroundColor: '#000108',
-    borderRadius: moderateScale(8),
-    borderWidth: 0.7,
-    borderColor: '#A3A3A3',
-    paddingHorizontal: moderateScale(16),
+    minHeight: vs(38),
+    backgroundColor: '#1a1a1a',
+    borderRadius: ms(8),
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: wp(4),
     fontFamily: 'Lato_400Regular',
     fontSize: RFValue(14),
     color: '#FFFFFF',
   },
   datePickerSelectBtn: {
-    paddingHorizontal: moderateScale(20),
-    paddingVertical: verticalScale(12),
+    paddingHorizontal: ms(20),
+    paddingVertical: vs(12),
     backgroundColor: colors.brand,
-    borderRadius: moderateScale(8),
+    borderRadius: ms(8),
   },
   datePickerSelectText: {
     fontFamily: 'Lato_700Bold',

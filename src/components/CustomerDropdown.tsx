@@ -9,11 +9,13 @@ import {
   Image,
   useWindowDimensions,
 } from 'react-native';
+import { wp, hp, ms } from '../utils/responsive';
 
 export interface CustomerOption {
   id: string;
   name: string;
   image?: string;
+  birthday?: string;
 }
 
 interface CustomerDropdownProps {
@@ -43,9 +45,9 @@ export function CustomerDropdown({
   triggerLayout,
 }: CustomerDropdownProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const formPadding = 32;
+  const formPadding = wp(8);
   const dropdownWidth = screenWidth - formPadding * 2;
-  const dropdownTop = triggerLayout ? triggerLayout.y + triggerLayout.height - 1 : 100;
+  const dropdownTop = triggerLayout ? triggerLayout.y + triggerLayout.height - 1 : hp(12);
 
   return (
     <Modal
@@ -119,95 +121,63 @@ export function CustomerDropdown({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   dropdown: {
     position: 'absolute',
     left: 0,
     backgroundColor: '#1a1a1a',
-    borderRadius: 8,
+    borderRadius: ms(8),
     borderWidth: 0.7,
     borderColor: '#A3A3A3',
-    maxHeight: 240,
+    maxHeight: hp(30),
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: ms(8),
     elevation: 8,
   },
   addNewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(1.8),
+    gap: ms(12),
     backgroundColor: 'rgba(37, 175, 255, 0.15)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  addNewRowPressed: {
-    opacity: 0.8,
-  },
+  addNewRowPressed: { opacity: 0.8 },
   addNewIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: ms(28),
+    height: ms(28),
+    borderRadius: ms(14),
     backgroundColor: '#25AFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addNewPlus: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    marginTop: -2,
-  },
-  addNewText: {
-    fontFamily: 'Lato_700Bold',
-    fontSize: 14,
-    color: '#25AFFF',
-  },
-  list: {
-    maxHeight: 260,
-  },
+  addNewPlus: { fontSize: ms(18), fontWeight: '600', color: '#000', marginTop: -2 },
+  addNewText: { fontFamily: 'Lato_700Bold', fontSize: ms(14), color: '#25AFFF' },
+  list: { maxHeight: hp(32) },
   customerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(1.5),
+    gap: ms(12),
   },
-  customerRowPressed: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  customerRowSelected: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
+  customerRowPressed: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  customerRowSelected: { backgroundColor: 'rgba(255,255,255,0.08)' },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: ms(36),
+    height: ms(36),
+    borderRadius: ms(18),
     backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarInitial: {
-    fontFamily: 'Lato_700Bold',
-    fontSize: 16,
-    color: '#fff',
-  },
-  customerName: {
-    flex: 1,
-    fontFamily: 'Lato_400Regular',
-    fontSize: 14,
-    color: '#fff',
-  },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarInitial: { fontFamily: 'Lato_700Bold', fontSize: ms(16), color: '#fff' },
+  customerName: { flex: 1, fontFamily: 'Lato_400Regular', fontSize: ms(14), color: '#fff' },
 });

@@ -23,6 +23,11 @@ export const colors = {
     green: '#9DE684',
     gray: 'rgba(108, 108, 108, 0.9)',
   },
+  /** Parked list pill: dark purple fill + magenta border (matches time-indicator pill style). */
+  parked: {
+    background: '#4A3658',
+    border: highlightColors.neonPink,
+  },
   highlight: highlightColors,
   indicator: {
     badge: '#EA5547',

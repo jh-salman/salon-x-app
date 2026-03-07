@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -16,33 +17,19 @@ import dayjs from 'dayjs';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, G } from 'react-native-svg';
 import { useEvents } from '../context/EventsContext';
+import { useServices } from '../context/ServicesContext';
+import { useClients } from '../context/ClientsContext';
 import { CustomerDropdown, type CustomerOption } from '../components/CustomerDropdown';
-import { ServiceDropdown, type ServiceOption } from '../components/ServiceDropdown';
-import { MOCK_CLIENTS } from '../data/clients';
-import { MOCK_SERVICES } from '../data/services';
-
-const CUSTOMERS_WITH_IMAGES: CustomerOption[] = [
-  { id: 'c1', name: 'Claire Mills', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop' },
-  { id: 'c2', name: 'Joshua Mitchell', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop' },
-  { id: 'c3', name: 'Cristi Curls', image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop' },
-  { id: 'c4', name: 'Lionesse Yami' },
-  { id: 'c5', name: 'Christian Chang' },
-  { id: 'c6', name: 'Jade Solis' },
-  { id: 'c7', name: 'Claude Bowman' },
-  { id: 'c8', name: 'Mone Lara' },
-  { id: 'c9', name: 'Brooke Barber' },
-  { id: 'c10', name: 'Ayesha Drake' },
-];
-
-const ALL_CUSTOMERS: CustomerOption[] = [
-  ...CUSTOMERS_WITH_IMAGES,
-  ...MOCK_CLIENTS.map((c) => ({ id: c.id, name: c.clientName })),
-];
+import { ServiceDropdown } from '../components/ServiceDropdown';
+import type { ServiceOption } from '../data/services';
+import { wp, hp, ms, vs } from '../utils/responsive';
 
 export function NewAppointmentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ date?: string; hour?: string }>();
   const { addEvent } = useEvents();
+  const { services, lastAddedService, clearLastAddedService } = useServices();
+  const { clients, lastAddedClient, clearLastAddedClient } = useClients();
 
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
@@ -60,24 +47,70 @@ export function NewAppointmentScreen() {
   const [notes, setNotes] = useState('');
 
   const [startDate, setStartDate] = useState<Date>(() => new Date());
+  const appliedFromContextRef = useRef(false);
+  const lastAddedClientRef = useRef(lastAddedClient);
+  const lastAddedServiceRef = useRef(lastAddedService);
+  lastAddedClientRef.current = lastAddedClient;
+  lastAddedServiceRef.current = lastAddedService;
+
+  useFocusEffect(
+    useCallback(() => {
+      setCustomerDropdownOpen(false);
+      setServiceDropdownOpen(false);
+      if (params?.date && params?.hour) {
+        const d = new Date(params.date);
+        const hour = parseInt(String(params.hour), 10) || 9;
+        d.setHours(hour, 0, 0, 0);
+        setStartDate(d);
+      }
+      const timer = setTimeout(() => {
+        const pendingClient = lastAddedClientRef.current;
+        const pendingService = lastAddedServiceRef.current;
+        if (pendingClient) {
+          setCustomer(pendingClient);
+          clearLastAddedClient();
+          appliedFromContextRef.current = true;
+        }
+        if (pendingService) {
+          setSelectedService(pendingService);
+          clearLastAddedService();
+          appliedFromContextRef.current = true;
+        }
+        if (!pendingClient && !pendingService) {
+          if (appliedFromContextRef.current) {
+            appliedFromContextRef.current = false;
+          } else {
+            setCustomer(null);
+            setSelectedService(null);
+            setPrice('');
+            setDuration('60');
+            setAppointmentType('');
+            setDepositDue('50%');
+            setNotes('');
+            setRepeatEnabled(false);
+            if (!params?.date || !params?.hour) {
+              setStartDate(new Date());
+            }
+          }
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }, [params?.date, params?.hour, clearLastAddedClient, clearLastAddedService])
+  );
 
   useEffect(() => {
-    if (params.date && params.hour) {
-      const d = new Date(params.date);
-      const hour = parseInt(params.hour, 10) || 9;
-      d.setHours(hour, 0, 0, 0);
-      setStartDate(d);
+    if (selectedService) {
+      if (selectedService.price != null) setPrice(String(selectedService.price));
+      const clientDur = selectedService.duration ?? 60;
+      const block = selectedService.blockTimeAfter ?? 0;
+      setDuration(String(clientDur + block));
     }
-  }, [params.date, params.hour]);
-
-  useEffect(() => {
-    if (selectedService?.duration != null) setDuration(String(selectedService.duration));
-    if (selectedService?.price != null) setPrice(String(selectedService.price));
   }, [selectedService]);
 
   const dateStr = format(startDate, 'EEE, MMM d, yyyy');
   const timeStr = format(startDate, 'h:mm a');
-  const endDate = dayjs(startDate).add(parseInt(duration, 10) || 60, 'minute').toDate();
+  const totalMinutes = parseInt(duration, 10) || 60;
+  const endDate = dayjs(startDate).add(totalMinutes, 'minute').toDate();
 
   const handleAddNewCustomer = () => {
     setCustomerDropdownOpen(false);
@@ -98,8 +131,10 @@ export function NewAppointmentScreen() {
       service: serviceName,
       start: startDate,
       end: endDate,
-      color: '#25AFFF',
+      color: selectedService?.calendarColor ?? '#25AFFF',
       allDay: false,
+      processingTimeStart: selectedService?.processingTimeStart,
+      processingTimeEnd: selectedService?.processingTimeEnd,
     });
     router.back();
   };
@@ -169,7 +204,7 @@ export function NewAppointmentScreen() {
             </TouchableOpacity>
             <CustomerDropdown
               visible={customerDropdownOpen}
-              customers={ALL_CUSTOMERS}
+              customers={clients}
               selectedCustomer={customer}
               onSelect={setCustomer}
               onAddNew={handleAddNewCustomer}
@@ -201,7 +236,7 @@ export function NewAppointmentScreen() {
             </TouchableOpacity>
             <ServiceDropdown
               visible={serviceDropdownOpen}
-              services={MOCK_SERVICES}
+              services={services}
               selectedService={selectedService}
               onSelect={setSelectedService}
               onAddNew={handleAddNewService}
@@ -383,171 +418,143 @@ export function NewAppointmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
   scrollView: { flex: 1 },
-  content: {
-    flexGrow: 1,
-    paddingBottom: 10,
-  },
+  content: { flexGrow: 1, paddingBottom: hp(1.5) },
   header: {
-    height: 48,
+    height: vs(48),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: wp(8),
   },
-  backButton: {
-    width: 15,
-    height: 10,
-  },
+  backButton: { width: ms(15), height: vs(10) },
   headerTitle: {
     flex: 1,
     fontFamily: 'Lato',
-    fontSize: 16,
-    lineHeight: 16,
+    fontSize: ms(16),
+    lineHeight: ms(16),
     color: '#FFFFFF',
     textAlign: 'center',
-    marginLeft: 8,
+    marginLeft: ms(8),
   },
-  headerSpacer: {
-    width: 15,
-  },
-  customerFieldWrapper: {
-    width: '100%',
-  },
-  customerPlaceholder: {
-    color: '#A3A3A3',
-  },
+  headerSpacer: { width: ms(15) },
+  customerFieldWrapper: { width: '100%' },
+  customerPlaceholder: { color: '#A3A3A3' },
   formContainer: {
-    paddingHorizontal: 32,
-    marginTop: 8,
-    gap: 6,
+    paddingHorizontal: wp(8),
+    marginTop: hp(1),
+    gap: hp(0.8),
   },
   inputField: {
-    minHeight: 43,
-    backgroundColor: '#000108',
-    borderRadius: 8,
-    borderWidth: 0.7,
-    borderColor: '#A3A3A3',
+    minHeight: vs(38),
+    backgroundColor: '#1a1a1a',
+    borderRadius: ms(8),
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(0.9),
+    gap: ms(8),
   },
-  inputIcon: {
-    marginRight: 0,
-  },
+  inputIcon: { marginRight: 0 },
   inputText: {
     flex: 1,
     fontFamily: 'Lato',
-    fontSize: 14,
-    lineHeight: 16,
-    color: '#A3A3A3',
-  },
-  inputValue: {
+    fontSize: ms(14),
+    lineHeight: ms(16),
     color: '#FFFFFF',
+    padding: 0,
   },
-  dateTimeContainer: {
-    flex: 1,
-    gap: 2,
-  },
-  timeText: {
-    fontSize: 12,
-    color: '#A3A3A3',
-  },
+  inputValue: { color: '#FFFFFF' },
+  dateTimeContainer: { flex: 1, gap: hp(0.3) },
+  timeText: { fontSize: ms(12), color: '#A3A3A3' },
   depositValue: {
     fontFamily: 'Lato-Bold',
-    fontSize: 14,
-    lineHeight: 16,
+    fontSize: ms(14),
+    lineHeight: ms(16),
     color: '#FFFFFF',
   },
   uploadText: {
     fontFamily: 'Lato',
-    fontSize: 14,
-    lineHeight: 16,
+    fontSize: ms(14),
+    lineHeight: ms(16),
     color: '#25AFFF',
   },
-  switch: {
-    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
-  },
+  switch: { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] },
   notesField: {
-    minHeight: 120,
-    backgroundColor: '#000108',
-    borderRadius: 8,
-    borderWidth: 0.7,
-    borderColor: '#A3A3A3',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    minHeight: hp(12),
+    backgroundColor: '#1a1a1a',
+    borderRadius: ms(8),
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(0.9),
   },
   notesHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: hp(1),
   },
   notesCounter: {
     fontFamily: 'Lato',
-    fontSize: 14,
-    lineHeight: 16,
+    fontSize: ms(14),
+    lineHeight: ms(16),
     color: '#A3A3A3',
   },
   notesInput: {
     fontFamily: 'Lato',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: ms(14),
+    lineHeight: ms(18),
     color: '#FFFFFF',
-    minHeight: 60,
+    minHeight: hp(6),
     padding: 0,
   },
   buttonsContainer: {
-    paddingHorizontal: 59,
-    marginTop: 16,
-    gap: 12,
+    paddingHorizontal: wp(15),
+    marginTop: hp(2),
+    gap: hp(1.5),
   },
   bookButton: {
-    height: 48,
-    borderRadius: 24,
+    height: vs(42),
+    borderRadius: ms(21),
     borderWidth: 1.5,
     borderColor: '#0677B9',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: hp(1) },
     shadowOpacity: 1,
-    shadowRadius: 32,
+    shadowRadius: ms(32),
     elevation: 8,
   },
   bookButtonText: {
     fontFamily: 'Lato-Bold',
-    fontSize: 12,
-    lineHeight: 12,
+    fontSize: ms(12),
+    lineHeight: ms(12),
     color: '#000000',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   cancelButton: {
-    height: 48,
-    borderRadius: 24,
+    height: vs(42),
+    borderRadius: ms(21),
     borderWidth: 1.5,
     borderColor: 'rgba(200, 200, 200, 0)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: hp(1) },
     shadowOpacity: 1,
-    shadowRadius: 32,
+    shadowRadius: ms(32),
     elevation: 8,
   },
   cancelButtonText: {
     fontFamily: 'Lato-Bold',
-    fontSize: 12,
-    lineHeight: 12,
+    fontSize: ms(12),
+    lineHeight: ms(12),
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,

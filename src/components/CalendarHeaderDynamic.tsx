@@ -1,22 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, PanResponder } from 'react-native';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
+import { View, Text, StyleSheet, Pressable, Animated, PanResponder, useWindowDimensions } from 'react-native';
+import { ms, vs } from '../utils/responsive';
 import { RFValue } from 'react-native-responsive-fontsize';
 import Svg, { Path, G } from 'react-native-svg';
-import {
-  format,
-  addDays,
-  subDays,
-  startOfWeek,
-  addWeeks,
-  subWeeks,
-  addMonths,
-  subMonths,
-  isSameDay,
-  getDay,
-  isToday,
-} from 'date-fns';
-import { AllDaySection } from './AllDaySection';
+import { format, addDays, subDays, startOfWeek, addMonths, subMonths, isSameDay, getDay, isToday } from 'date-fns';
 import { colors as themeColors } from '../theme';
 
 const svgPaths = {
@@ -29,16 +16,21 @@ const svgPaths = {
 };
 
 export type ViewMode = 'day' | 'week' | 'month';
+const FIVE_DAY_WINDOW = 5;
+const TIME_AXIS_WIDTH = ms(40);
+const WEEK_HORIZONTAL_PADDING = ms(16);
 
 interface CalendarHeaderDynamicProps {
   initialDate?: Date;
   onDateChange?: (date: Date) => void;
   onViewModeChange?: (mode: ViewMode) => void;
+  /** When provided, header tab follows this (e.g. Day active when switching from week view) */
+  viewMode?: ViewMode;
 }
 
 // Back arrow icon (left-pointing) – same as calendar nav, export for reuse e.g. Client Details
 export const CalendarBackArrow = () => (
-  <View style={{ width: moderateScale(14.6), height: verticalScale(9.5) }}>
+  <View style={{ width: ms(14.6), height: vs(9.5) }}>
     <Svg width="15.6059" height="10.1073" viewBox="0 0 15.6059 10.1073" fill="none">
       <G>
         <Path d={svgPaths.p104c6e00} stroke={themeColors.highlight.neonPink} strokeWidth="0.6" fill="none" />
@@ -50,8 +42,8 @@ export const CalendarBackArrow = () => (
 
 // Navigation Arrow Component
 const NavigationArrow = ({ direction, onPress }: { direction: 'left' | 'right'; onPress: () => void }) => (
-  <Pressable onPress={onPress} hitSlop={moderateScale(10)}>
-    <View style={{ width: moderateScale(14.6), height: verticalScale(9.5), transform: direction === 'right' ? [{ rotate: '180deg' }] : [] }}>
+  <Pressable onPress={onPress} hitSlop={ms(10)}>
+    <View style={{ width: ms(14.6), height: vs(9.5), transform: direction === 'right' ? [{ rotate: '180deg' }] : [] }}>
       <Svg width="15.6059" height="10.1073" viewBox="0 0 15.6059 10.1073" fill="none">
         <G>
           <Path d={svgPaths.p104c6e00} stroke={themeColors.highlight.neonPink} strokeWidth="0.6" fill="none" />
@@ -64,7 +56,7 @@ const NavigationArrow = ({ direction, onPress }: { direction: 'left' | 'right'; 
 
 // Divider Component
 const Divider = ({ left }: { left: number }) => (
-  <View style={[styles.divider, { left, top: verticalScale(7.5) }]}>
+  <View style={[styles.divider, { left, top: vs(7.5) }]}>
     <Svg width="1.50066" height="17.5449" viewBox="0 0 1.50066 17.5449" fill="none">
       <G>
         <Path d={svgPaths.p3dd3e830} fill="white" fillOpacity="0.08" />
@@ -83,20 +75,15 @@ const TabSelector = ({
   onViewModeChange: (mode: ViewMode) => void;
 }) => {
   const tabPositions = {
-    day: moderateScale(3.75),
-    week: moderateScale(65),
-    month: moderateScale(130),
+    day: ms(3.75),
+    week: ms(65),
+    month: ms(130),
   };
 
   const translateX = useRef(new Animated.Value(tabPositions[viewMode])).current;
 
   useEffect(() => {
-    Animated.spring(translateX, {
-      toValue: tabPositions[viewMode],
-      useNativeDriver: true,
-      damping: 15,
-      stiffness: 150,
-    }).start();
+    translateX.setValue(tabPositions[viewMode]);
   }, [viewMode]);
 
   const handleTabPress = (mode: ViewMode) => {
@@ -113,8 +100,8 @@ const TabSelector = ({
       </View>
 
       {/* Dividers */}
-      <Divider left={moderateScale(62)} />
-      <Divider left={moderateScale(125)} />
+      <Divider left={ms(62)} />
+      <Divider left={ms(125)} />
 
       {/* Animated Active Tab Background */}
       <Animated.View style={[styles.activeTab, { left: 0, transform: [{ translateX }] }]}>
@@ -122,38 +109,35 @@ const TabSelector = ({
       </Animated.View>
 
       {/* Tab Labels */}
-      <Pressable onPress={() => handleTabPress('day')} style={[styles.tabLabel, { left: moderateScale(-5), width: moderateScale(77.22) }]}>
+      <Pressable onPress={() => handleTabPress('day')} style={[styles.tabLabel, { left: ms(-5), width: ms(77.22) }]}>
         <Text style={[styles.tabText, viewMode === 'day' && styles.activeTabText]}>Day</Text>
       </Pressable>
 
-      <Pressable onPress={() => handleTabPress('week')} style={[styles.tabLabel, { left: moderateScale(67), width: moderateScale(55) }]}>
-        <Text style={[styles.tabText, viewMode === 'week' && styles.activeTabText]}>Week</Text>
+      <Pressable onPress={() => handleTabPress('week')} style={[styles.tabLabel, { left: ms(67), width: ms(55) }]}>
+        <Text style={[styles.tabText, viewMode === 'week' && styles.activeTabText]}>5 Day</Text>
       </Pressable>
 
-      <Pressable onPress={() => handleTabPress('month')} style={[styles.tabLabel, { left: moderateScale(130), width: moderateScale(55) }]}>
+      <Pressable onPress={() => handleTabPress('month')} style={[styles.tabLabel, { left: ms(130), width: ms(55) }]}>
         <Text style={[styles.tabText, viewMode === 'month' && styles.activeTabText]}>Month</Text>
       </Pressable>
     </View>
   );
 };
 
-// Week Days Header
-const WeekDaysHeader = () => {
-  const days = [
-    { label: 'M', color: '#FFFFFF' },
-    { label: 'T', color: 'white' },
-    { label: 'W', color: 'white' },
-    { label: 'T', color: 'white' },
-    { label: 'F', color: 'white' },
-    { label: 'S', color: 'white' },
-    { label: 'S', color: '#FFFFFF' },
-  ];
-
+const WeekDaysHeader = ({
+  dates,
+  dayWidth,
+  useFiveDayLayout = false,
+}: {
+  dates: Date[];
+  dayWidth?: number;
+  useFiveDayLayout?: boolean;
+}) => {
   return (
-    <View style={styles.weekDaysContainer}>
-      {days.map((day, index) => (
-        <View key={index} style={styles.weekDay}>
-          <Text style={[styles.weekDayText, { color: day.color }]}>{day.label}</Text>
+    <View style={[styles.weekDaysContainer, useFiveDayLayout && styles.weekDaysContainerFiveDay]}>
+      {dates.map((date, index) => (
+        <View key={index} style={[styles.weekDay, dayWidth ? { width: dayWidth } : null]}>
+          <Text style={[styles.weekDayText, { color: 'white' }]}>{format(date, 'EEEEE')}</Text>
         </View>
       ))}
     </View>
@@ -165,10 +149,12 @@ const CalendarDay = ({
   date,
   selectedDate,
   onPress,
+  dayWidth,
 }: {
   date: Date;
   selectedDate: Date;
   onPress: (date: Date) => void;
+  dayWidth?: number;
 }) => {
   const isCurrentDay = isSameDay(date, selectedDate);
   const isTodayDate = isToday(date);
@@ -176,7 +162,7 @@ const CalendarDay = ({
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
   return (
-    <Pressable onPress={() => onPress(date)} style={styles.calendarDayWrapper}>
+    <Pressable onPress={() => onPress(date)} style={[styles.calendarDayWrapper, dayWidth ? { width: dayWidth } : null]}>
       {isCurrentDay ? (
         <View style={styles.todayWrapper}>
           <View style={styles.todayCircle}>
@@ -196,23 +182,22 @@ const CalendarDay = ({
 
 // Calendar Row Component
 const CalendarRow = ({
-  currentDate,
+  dates,
   selectedDate,
   onDateSelect,
+  dayWidth,
+  useFiveDayLayout = false,
 }: {
-  currentDate: Date;
+  dates: Date[];
   selectedDate: Date;
   onDateSelect: (date: Date) => void;
+  dayWidth?: number;
+  useFiveDayLayout?: boolean;
 }) => {
-  const weekDays = useMemo(() => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, [currentDate]);
-
   return (
-    <View style={styles.calendarRow}>
-      {weekDays.map((date, index) => (
-        <CalendarDay key={index} date={date} selectedDate={selectedDate} onPress={onDateSelect} />
+    <View style={[styles.calendarRow, useFiveDayLayout && styles.calendarRowFiveDay]}>
+      {dates.map((date, index) => (
+        <CalendarDay key={index} date={date} selectedDate={selectedDate} onPress={onDateSelect} dayWidth={dayWidth} />
       ))}
     </View>
   );
@@ -223,15 +208,37 @@ export default function CalendarHeaderDynamic({
   initialDate = new Date(),
   onDateChange,
   onViewModeChange,
+  viewMode: viewModeProp,
 }: CalendarHeaderDynamicProps) {
+  const { width: screenWidth } = useWindowDimensions();
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [currentDate, setCurrentDate] = useState(initialDate);
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const [internalViewMode, setInternalViewMode] = useState<ViewMode>('day');
+  const viewMode = viewModeProp ?? internalViewMode;
 
   useEffect(() => {
     setSelectedDate(initialDate);
     setCurrentDate(initialDate);
   }, [initialDate.getTime()]);
+
+  useEffect(() => {
+    if (viewModeProp !== undefined) {
+      setInternalViewMode(viewModeProp);
+    }
+  }, [viewModeProp]);
+
+  const visibleDates = useMemo(() => {
+    if (viewMode === 'week') {
+      return Array.from({ length: FIVE_DAY_WINDOW }, (_, i) => addDays(currentDate, i));
+    }
+    const start = startOfWeek(currentDate, { weekStartsOn: 0 });
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }, [currentDate, viewMode]);
+
+  const fiveDayColumnWidth = useMemo(() => {
+    const available = screenWidth - TIME_AXIS_WIDTH - WEEK_HORIZONTAL_PADDING;
+    return available / FIVE_DAY_WINDOW;
+  }, [screenWidth]);
 
   const handleNext = () => {
     let newDate: Date;
@@ -240,7 +247,7 @@ export default function CalendarHeaderDynamic({
         newDate = addDays(currentDate, 1);
         break;
       case 'week':
-        newDate = addWeeks(currentDate, 1);
+        newDate = addDays(currentDate, FIVE_DAY_WINDOW);
         break;
       case 'month':
         newDate = addMonths(currentDate, 1);
@@ -260,7 +267,7 @@ export default function CalendarHeaderDynamic({
         newDate = subDays(currentDate, 1);
         break;
       case 'week':
-        newDate = subWeeks(currentDate, 1);
+        newDate = subDays(currentDate, FIVE_DAY_WINDOW);
         break;
       case 'month':
         newDate = subMonths(currentDate, 1);
@@ -280,7 +287,7 @@ export default function CalendarHeaderDynamic({
   };
 
   const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode);
+    if (viewModeProp === undefined) setInternalViewMode(mode);
     onViewModeChange?.(mode);
   };
 
@@ -302,17 +309,40 @@ export default function CalendarHeaderDynamic({
     <View style={styles.container}>
       {/* Date Navigation */}
       <View style={styles.dateNavigation}>
-        <NavigationArrow direction="left" onPress={handlePrevious} />
         <TabSelector viewMode={viewMode} onViewModeChange={handleViewModeChange} />
-        <NavigationArrow direction="right" onPress={handleNext} />
       </View>
 
       {/* Week Days Header */}
-      <WeekDaysHeader />
+      <View
+        style={
+          viewMode === 'week'
+            ? [styles.fiveDayAlignedRow, { paddingLeft: TIME_AXIS_WIDTH, paddingRight: WEEK_HORIZONTAL_PADDING }]
+            : undefined
+        }
+      >
+        <WeekDaysHeader
+          dates={visibleDates}
+          dayWidth={viewMode === 'week' ? fiveDayColumnWidth : undefined}
+          useFiveDayLayout={viewMode === 'week'}
+        />
+      </View>
 
       {/* Calendar Days Row with Swipe */}
-      <View {...panResponder.panHandlers}>
-        <CalendarRow currentDate={currentDate} selectedDate={selectedDate} onDateSelect={handleDateSelect} />
+      <View
+        {...panResponder.panHandlers}
+        style={
+          viewMode === 'week'
+            ? [styles.fiveDayAlignedRow, { paddingLeft: TIME_AXIS_WIDTH, paddingRight: WEEK_HORIZONTAL_PADDING }]
+            : undefined
+        }
+      >
+        <CalendarRow
+          dates={visibleDates}
+          selectedDate={selectedDate}
+          onDateSelect={handleDateSelect}
+          dayWidth={viewMode === 'week' ? fiveDayColumnWidth : undefined}
+          useFiveDayLayout={viewMode === 'week'}
+        />
       </View>
     </View>
   );
@@ -323,30 +353,27 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: 'black',
     width: '100%',
-    height: verticalScale(118),
-    borderBottomWidth: 1,
-    borderBottomColor:"#232627"
-  
-    // maxWidth: moderateScale(30),
+    height: vs(107) ,
   },
   dateNavigation: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: moderateScale(8),
-    height: verticalScale(49),
-    width: moderateScale(223),
-    paddingHorizontal: moderateScale(15),
+    justifyContent: 'center',
+    height: vs(37),
+    width: '100%',
+    paddingHorizontal: ms(12),
   },
   tabSelectorContainer: {
     position: 'relative',
-    width: '100%',
-    height: verticalScale(30),
+    width: ms(188.7),
+    height: vs(30),
+    alignSelf: 'center',
   },
   tabBackground: {
     position: 'absolute',
-    width: moderateScale(188.7),
-    height: verticalScale(30),
-    borderRadius: moderateScale(12.5),
+    width: ms(188.7),
+    height: vs(30),
+    borderRadius: ms(12.5),
     backgroundColor:  '#232627',
   },
   
@@ -354,41 +381,41 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-    borderRadius: moderateScale(12.5),
-    borderWidth: moderateScale(0.9),
+    borderRadius: ms(12.5),
+    borderWidth: ms(0.9),
     borderColor: 'rgba(200, 200, 200, 0.96)',
   },
   divider: {
     position: 'absolute',
-    width: moderateScale(1.5),
-    height: verticalScale(15),
+    width: ms(1.5),
+    height: vs(15),
   },
   activeTab: {
     position: 'absolute',
-    top: verticalScale(2.5),
-    width: moderateScale(55),
-    height: verticalScale(25),
-    borderRadius: moderateScale(8.5),
-    paddingHorizontal: moderateScale(14.4),
-    paddingVertical: verticalScale(4),
+    top: vs(2.5),
+    width: ms(55),
+    height: vs(25),
+    borderRadius: ms(8.5),
+    paddingHorizontal: ms(14.4),
+    paddingVertical: vs(4),
     backgroundColor: '#151719',
   },
   activeTabBorder: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    borderRadius: moderateScale(8.5),
-    borderWidth: moderateScale(0.9),
+    borderRadius: ms(8.5),
+    borderWidth: ms(0.9),
     borderColor: 'transparent',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: verticalScale(7.2) },
+    shadowOffset: { width: 0, height: vs(7.2) },
     shadowOpacity: 0.24,
-    shadowRadius: moderateScale(28.8),
+    shadowRadius: ms(28.8),
     elevation: 8,
   },
   tabLabel: {
     position: 'absolute',
-    top: verticalScale(10),
+    top: vs(10),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -407,14 +434,20 @@ const styles = StyleSheet.create({
   weekDaysContainer: {
     flexDirection: 'row',
     backgroundColor: 'black',
-    width: moderateScale(325),
-    height: verticalScale(24),
+    width: ms(330),
+    height: vs(24),
     alignItems: 'center',
     justifyContent: 'center',
+    paddingLeft: ms(40) - ms(5),
+  },
+  weekDaysContainerFiveDay: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    paddingLeft: ms(0),
   },
   weekDay: {
-    width: moderateScale(46),
-    height: verticalScale(24),
+    width: ms(42),
+    height: vs(24),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -427,25 +460,33 @@ const styles = StyleSheet.create({
   },
   calendarRow: {
     flexDirection: 'row',
-    width: moderateScale(325),
+    width: ms(325) + ms(40) - ms(5),
     backgroundColor: 'black',
+    paddingLeft: ms(40) - ms(5),
+  },
+  calendarRowFiveDay: {
+    width: '100%',
+    paddingLeft: ms(0),
+  },
+  fiveDayAlignedRow: {
+    width: '100%',
   },
   calendarDayWrapper: {
-    width: moderateScale(46),
+    width: ms(42),
     alignItems: 'center',
     justifyContent: 'center',
   },
   normalDayWrapper: {
-    paddingVertical: verticalScale(6),
-    height: verticalScale(36),
+    paddingVertical: vs(6),
+    height: vs(36),
     alignItems: 'center',
     justifyContent: 'center',
   },
   todayWrapper: {
-    paddingVertical: verticalScale(0),
+    paddingVertical: vs(0),
     // backgroundColor:"blue",
-    width: moderateScale(32),
-    height:moderateScale(32),
+    width: ms(32),
+    height:ms(32),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -456,7 +497,7 @@ const styles = StyleSheet.create({
     backgroundColor: themeColors.highlight.neonPink,
     alignItems: 'center',
     justifyContent: 'center',
-    padding:  moderateScale(2),
+    padding:  ms(2),
   },
   todayText: {
     fontFamily: 'Lato-Bold',

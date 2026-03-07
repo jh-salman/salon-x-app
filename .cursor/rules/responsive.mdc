@@ -1,0 +1,38 @@
+---
+description: Use only react-native-responsive-screen and react-native-responsive-fontsize for all responsive styling
+globs: "**/*.tsx,**/*.ts"
+alwaysApply: true
+---
+
+# Responsive styling
+
+Always use these two packages for responsive values in this project:
+
+1. **react-native-responsive-screen** – layout (width/height, padding, margins)
+2. **react-native-responsive-fontsize** – font sizes
+
+Import from `../utils/responsive` (or the correct relative path):
+
+- **`wp(n)`** – width percentage (from react-native-responsive-screen)
+- **`hp(n)`** – height percentage (from react-native-responsive-screen)
+- **`RFValue(size)`** – responsive font size (from react-native-responsive-fontsize)
+
+Examples:
+
+```ts
+import { wp, hp, RFValue } from '../utils/responsive';
+
+const styles = StyleSheet.create({
+  box: {
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(2),
+    marginTop: hp(1.5),
+  },
+  title: {
+    fontSize: RFValue(20),
+    lineHeight: RFValue(24),
+  },
+});
+```
+
+Do not use raw pixel numbers for layout or font sizes; use `wp`, `hp`, or `RFValue` so the UI scales across devices.

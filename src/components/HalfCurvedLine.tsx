@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
+import { ms, vs } from '../utils/responsive';
 import Svg, { Path, G, Defs, LinearGradient, Stop, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
 
 const CURVED_LINE_PATH = 'M33.5 24C33.5 144.5 111.5 82.2516 111.5 225';
@@ -27,7 +27,7 @@ export function HalfCurvedLine({
 
   return (
     <View style={styles.wrapper}>
-      <Svg width={moderateScale(145)} height={verticalScale(265)} viewBox="0 0 145 265" fill="none">
+      <Svg width={ms(145)} height={vs(265)} viewBox="0 0 145 265" fill="none">
         <Defs>
           <Filter id={filterId} x="0" y="0" width="145" height="265" filterUnits="userSpaceOnUse">
             <FeFlood floodOpacity="0" result="BackgroundImageFix" />
@@ -56,9 +56,9 @@ export function HalfCurvedLine({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    left: moderateScale(-32),
-    top: verticalScale(-40),
-    width: moderateScale(145),
-    height: verticalScale(265),
+    left: ms(-32),
+    top: vs(-40),
+    width: ms(145),
+    height: vs(265),
   },
 });

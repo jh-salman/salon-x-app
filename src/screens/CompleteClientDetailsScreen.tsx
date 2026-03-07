@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 // @ts-expect-error - @expo/vector-icons resolved via expo
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import type { ClientDetails } from "../data/clients";
+import { wp, hp, ms, vs } from "../utils/responsive";
 
 const SOCIAL_ICONS: { name: string }[] = [
   { name: "facebook-f" },
@@ -110,7 +111,7 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
           {/* Cards container: 80% width, centered, professional */}
           <View style={styles.cardsContainer}>
             {/* Consultation Card - from clientDetails (double height) */}
-            <SectionCard title="Consultation" cardMinHeight={140}>
+            <SectionCard title="Consultation" cardMinHeight={hp(17)}>
               <View style={styles.consultTopRow}>
                 <Text style={styles.blockTitle}>{dateStr}</Text>
                 <Text style={styles.blockTitle}>{duration} min</Text>
@@ -165,13 +166,13 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
             </TouchableOpacity>
           </View>
 
-          <View style={{ height: 44 }} />
+          <View style={{ height: vs(44) }} />
 
           {/* Bottom Social Icons - fixed at bottom, horizontally centered */}
           <View style={styles.bottomIcons}>
             {SOCIAL_ICONS.map(({ name }) => (
               <TouchableOpacity key={name} style={styles.bottomIconCircle} activeOpacity={0.7}>
-                <FontAwesome5 name={name} size={24} color="#fff" />
+                <FontAwesome5 name={name} size={ms(24)} color="#fff" />
               </TouchableOpacity>
             ))}
           </View>
@@ -238,224 +239,153 @@ function ProductRow({ name, price }: { name: string; price: string }) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#000" },
-  // screen: { flex: 1, backgroundColor: "#000" },
-
-  headerRow: {
-    flexDirection: "row",
-    // background:'transparent', 
-    backgroundColor:'transparent',
-    alignItems: "center",
-    // paddingHorizontal: "5%",
-
-    // paddingTop: 6,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  rightDecorationWrap: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-  },
-  mainContent: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
+  headerRow: { flexDirection: "row", backgroundColor: "transparent", alignItems: "center" },
+  backButton: { width: ms(44), height: ms(44), justifyContent: "center", alignItems: "center" },
+  rightDecorationWrap: { position: "absolute", right: 0, top: 0 },
+  mainContent: { flex: 1, backgroundColor: "#000" },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: ms(36),
+    height: ms(36),
+    borderRadius: ms(10),
     borderWidth: 1,
     borderColor: "white",
     alignItems: "center",
     justifyContent: "center",
   },
-  iconText: { color: "#fff", fontSize: 16 },
-
+  iconText: { color: "#fff", fontSize: ms(16) },
   datePill: {
     borderWidth: 1,
     borderColor: "white",
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: ms(18),
+    paddingHorizontal: wp(3),
+    paddingVertical: hp(0.7),
     alignItems: "center",
     justifyContent: "center",
   },
-  dateText: { color: "#fff", fontSize: 12, lineHeight: 14, fontWeight: "600" },
-
-  scrollContent: { paddingHorizontal: 0, paddingBottom: 24 },
-
-  profileWrap: { marginTop: -20, alignItems: "center" },
+  dateText: { color: "#fff", fontSize: ms(12), lineHeight: ms(14), fontWeight: "600" },
+  scrollContent: { paddingHorizontal: 0, paddingBottom: hp(3) },
+  profileWrap: { marginTop: hp(-2.5), alignItems: "center" },
   avatar: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
+    width: ms(74),
+    height: ms(74),
+    borderRadius: ms(37),
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.3)",
-    marginBottom: 8,
+    marginBottom: hp(1),
   },
-  avatarPlaceholder: {
-    backgroundColor: "#333",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarInitial: {
-    fontSize: 28,
-    color: "#fff",
-    fontWeight: "700",
-  },
-
-  profileRow: {
-    width: "80%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  smallIconGroup: { flexDirection: "row", gap: 8 },
+  avatarPlaceholder: { backgroundColor: "#333", justifyContent: "center", alignItems: "center" },
+  avatarInitial: { fontSize: ms(28), color: "#fff", fontWeight: "700" },
+  profileRow: { width: "80%", flexDirection: "row", alignItems: "center", gap: ms(10) },
+  smallIconGroup: { flexDirection: "row", gap: ms(8) },
   smallSquare: {
-    width: 34,
-    height: 28,
-    borderRadius: 6,
+    width: ms(34),
+    height: vs(28),
+    borderRadius: ms(6),
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  nameBlock: { gap: 2 },
-  nameText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  subText: { color: "rgba(255,255,255,0.85)", fontSize: 12 },
-
-  sliderWrap: {
-    width: "60%",
-    marginTop: 5,
-    marginBottom: 6,
-    height: 26,
-    justifyContent: "center",
-  },
+  nameBlock: { gap: hp(0.25) },
+  nameText: { color: "#fff", fontSize: ms(16), fontWeight: "700" },
+  subText: { color: "rgba(255,255,255,0.85)", fontSize: ms(12) },
+  sliderWrap: { width: "60%", marginTop: hp(0.6), marginBottom: hp(0.75), height: vs(26), justifyContent: "center" },
   sliderLine: { height: 2, backgroundColor: "rgba(255,255,255,0.3)" },
   sliderKnob: {
     position: "absolute",
-    right: 10,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    right: wp(2.5),
+    width: ms(14),
+    height: ms(14),
+    borderRadius: ms(7),
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.5)",
     backgroundColor: "#25AFFF",
   },
-
-  cardsContainer: {
-    width: "90%",
-    alignSelf: "center",
-    marginTop: 4,
-  },
-  cardWrap: {
-    marginTop: 10,
-  },
+  cardsContainer: { width: "90%", alignSelf: "center", marginTop: hp(0.5) },
+  cardWrap: { marginTop: hp(1.2) },
   cardTitlePill: {
     alignSelf: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    marginBottom: -8,
+    borderRadius: ms(10),
+    paddingHorizontal: wp(2.5),
+    paddingVertical: hp(0.4),
+    marginBottom: hp(-1),
     zIndex: 1,
-    backgroundColor:"#000",
+    backgroundColor: "#000",
   },
-  cardTitleText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-
+  cardTitleText: { color: "#fff", fontSize: ms(11), fontWeight: "700" },
   card: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: ms(12),
+    paddingHorizontal: wp(2.5),
+    paddingVertical: hp(0.75),
     backgroundColor: "rgba(255,255,255,0.04)",
   },
-
-  consultTopRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  blockTitle: { color: "#fff", fontSize: 11, fontWeight: "700" },
-
-  hr: { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginVertical: 5 },
-
-  bodyText: { color: "rgba(255,255,255,0.9)", fontSize: 11, lineHeight: 14 },
-
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 5 },
-  bullet: { width: 14, color: "rgba(255,255,255,0.9)", fontSize: 12, marginRight: 5 },
-  rowLeft: { color: "#fff", fontSize: 11, fontWeight: "600" },
-  rowRight: { color: "#fff", fontSize: 11, fontWeight: "700" },
-
+  consultTopRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: hp(0.25) },
+  blockTitle: { color: "#fff", fontSize: ms(11), fontWeight: "700" },
+  hr: { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginVertical: hp(0.6) },
+  bodyText: { color: "rgba(255,255,255,0.9)", fontSize: ms(11), lineHeight: ms(14) },
+  row: { flexDirection: "row", alignItems: "center", paddingVertical: hp(0.6) },
+  bullet: { width: ms(14), color: "rgba(255,255,255,0.9)", fontSize: ms(12), marginRight: ms(5) },
+  rowLeft: { color: "#fff", fontSize: ms(11), fontWeight: "600" },
+  rowRight: { color: "#fff", fontSize: ms(11), fontWeight: "700" },
   recommendedPill: {
     alignSelf: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginVertical: 4,
+    borderRadius: ms(8),
+    paddingHorizontal: wp(2),
+    paddingVertical: hp(0.25),
+    marginVertical: hp(0.5),
     backgroundColor: "rgba(255,255,255,0.06)",
   },
-  recommendedText: { color: "#fff", fontSize: 10, fontWeight: "700" },
-
-  productRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 5,
-    gap: 6,
-  },
+  recommendedText: { color: "#fff", fontSize: ms(10), fontWeight: "700" },
+  productRow: { flexDirection: "row", alignItems: "center", paddingVertical: hp(0.6), gap: ms(6) },
   productIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
+    width: ms(26),
+    height: ms(26),
+    borderRadius: ms(6),
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.25)",
   },
-
   centerPill: {
     alignSelf: "center",
-    marginTop: 10,
+    marginTop: hp(1.2),
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderRadius: ms(10),
+    paddingHorizontal: wp(2.5),
+    paddingVertical: hp(0.6),
   },
-  pillText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-
-  ctaRow: { flexDirection: "row", gap: 8, marginTop: 10, width: "90%",height: 85, alignSelf: "center" },
+  pillText: { color: "#fff", fontSize: ms(11), fontWeight: "700" },
+  ctaRow: { flexDirection: "row", gap: ms(8), marginTop: hp(1.2), width: "90%", height: vs(85), alignSelf: "center" },
   cta: {
     flex: 1,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: ms(10),
+    paddingVertical: hp(1.5),
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: hp(0.5),
   },
-  ctaIcon: { color: "#fff", fontSize: 14 },
-  ctaText: { color: "#fff", fontSize: 12, fontWeight: "800" },
-
+  ctaIcon: { color: "#fff", fontSize: ms(14) },
+  ctaText: { color: "#fff", fontSize: ms(12), fontWeight: "800" },
   bottomIcons: {
     position: "absolute",
-    width:"100%",
+    width: "100%",
     bottom: 0,
     left: 0,
     right: 0,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 16,
-    paddingVertical: 10,
+    gap: wp(4),
+    paddingVertical: hp(1.2),
   },
   bottomIconCircle: {
-    width: 36,
-    height: 36,
-    // borderRadius: 13,
-    // borderWidth: 1,
-    // borderColor: "rgba(255,255,255,0.35)",
+    width: ms(36),
+    height: ms(36),
     alignItems: "center",
     justifyContent: "center",
   },
