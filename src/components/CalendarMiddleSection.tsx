@@ -8,27 +8,15 @@ import { GlassConfirmModal } from './GlassConfirmModal';
 import Svg, { Path, G, Circle, Ellipse, Defs, LinearGradient, Stop, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
 import { format } from 'date-fns';
 import { colors as themeColors } from '../theme';
+import { AppointmentCard, type Appointment, appointmentColors } from './AppointmentCard';
+
+export type { Appointment } from './AppointmentCard';
 
 const ORB_SIZE = 24;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PLACEMENT_LINE_MARGIN = wp(6);
 /** Match hour/grid line: same left as styles.gridLine so placement line aligns with calendar hour lines */
 const PLACEMENT_LINE_LEFT = ms(40);
-
-export interface Appointment {
-  id: string;
-  clientName: string;
-  service: string;
-  startTime: Date;
-  endTime: Date;
-  color: 'pink' | 'blue' | 'green' | 'gray';
-  isParked?: boolean;
-  hasAlarm?: boolean;
-  /** Minutes into service when processing begins */
-  processingTimeStart?: number;
-  /** Minutes into service when processing ends */
-  processingTimeEnd?: number;
-}
 
 export interface AllDayAppointment {
   id: string;
@@ -78,17 +66,6 @@ const DRAG_SCROLL_STEP = 28;
 const DRAG_SCROLL_INTERVAL_MS = 50;
 /** Day view content height (6–23, 56px/hour); must match HOUR_SLOTS * SLOT_HEIGHT below */
 const DAY_CONTENT_HEIGHT = (23 - 6 + 1) * 56;
-
-const svgPaths = {
-  alarm: 'M6.70319 6.5157L5.01819 5.51569V3.2507C5.01819 3.0507 4.85819 2.8907 4.65819 2.8907H4.62819C4.42819 2.8907 4.26819 3.0507 4.26819 3.2507V5.61069C4.26819 5.78569 4.35819 5.9507 4.51319 6.0407L6.33819 7.13569C6.50819 7.23569 6.72819 7.18569 6.82819 7.01569C6.93319 6.84069 6.87819 6.61569 6.70319 6.5157V6.5157ZM9.35819 1.3957L7.81819 0.115695C7.60819 -0.0593048 7.29319 -0.0343048 7.11319 0.180695C6.93819 0.390695 6.96819 0.705695 7.17819 0.885695L8.71319 2.1657C8.92319 2.3407 9.23819 2.3157 9.41819 2.1007C9.59819 1.8907 9.56819 1.5757 9.35819 1.3957V1.3957ZM0.818191 2.1657L2.35319 0.885695C2.56819 0.705695 2.59819 0.390695 2.41819 0.180695C2.24319 -0.0343048 1.92819 -0.0593048 1.71819 0.115695L0.178191 1.3957C-0.0318086 1.5757 -0.0618086 1.8907 0.118191 2.1007C0.293191 2.3157 0.608191 2.3407 0.818191 2.1657ZM4.76819 0.890695C2.28319 0.890695 0.268191 2.9057 0.268191 5.3907C0.268191 7.8757 2.28319 9.8907 4.76819 9.8907C7.25319 9.8907 9.26819 7.8757 9.26819 5.3907C9.26819 2.9057 7.25319 0.890695 4.76819 0.890695ZM4.76819 8.8907C2.83819 8.8907 1.26819 7.32069 1.26819 5.3907C1.26819 3.4607 2.83819 1.8907 4.76819 1.8907C6.69819 1.8907 8.26819 3.4607 8.26819 5.3907C6.69819 8.8907 8.26819 8.8907 4.76819 8.8907Z',
-};
-
-const appointmentColors = {
-  pink: { gradient: ['#592465', '#111'], indicator: themeColors.highlight.neonPink, text: '#FFFFFF', serviceText: '#FFFFFF' },
-  blue: { gradient: ['#305271', '#111'], indicator: themeColors.highlight.neonBlue, text: '#FFFFFF', serviceText: '#FFFFFF' },
-  green: { gradient: ['#3a5e2f', 'rgba(17, 17, 17, 0.07)'], indicator: '#9de684', text: '#FFFFFF', serviceText: '#FFFFFF' },
-  gray: { gradient: ['rgb(108, 108, 108)', 'rgb(17, 17, 17)'], indicator: 'white', text: '#FFFFFF', serviceText: '#FFFFFF' },
-};
 
 const allDayColors = {
   orange: { background: '#D27E00', backgroundOpacity: 0.24, border: '#FF7701', dotGradient: ['#F38B14', '#F93200'], dotBorderGradient: ['#D15913', '#E98963'] },
@@ -153,69 +130,16 @@ const AllDayEvent = ({ appointment }: { appointment: AllDayAppointment }) => {
 const AllDaySection = ({ appointments }: { appointments: AllDayAppointment[] }) => (
   <View style={styles.allDayContainer}>
     <View style={styles.allDayContent}>
-      {appointments.map((apt) => (
-        <AllDayEvent key={apt.id} appointment={apt} />
+      {appointments.map((apt, idx) => (
+        <AllDayEvent key={`${apt.id}-${idx}`} appointment={apt} />
       ))}
     </View>
     <View style={styles.allDayBorder} />
   </View>
 );
 
-const AlarmIcon = ({ color }: { color: string }) => (
-  <View style={styles.alarmIcon}>
-    <View style={styles.alarmIconInner}>
-      <Svg width={9.53638} height={9.8907} viewBox="0 0 9.53638 9.8907" fill="none">
-        <Path d={svgPaths.alarm} fill={color} />
-      </Svg>
-    </View>
-  </View>
-);
-
 const SLOT_HEIGHT = 56;
 const PIXELS_PER_MINUTE = SLOT_HEIGHT / 60;
-
-const AppointmentCardInner = ({ appointment, opacity }: { appointment: Appointment; opacity?: number }) => {
-  const colors = appointmentColors[appointment.color];
-  const durationMinutes = (appointment.endTime.getTime() - appointment.startTime.getTime()) / (1000 * 60);
-  const height = Math.max(durationMinutes * PIXELS_PER_MINUTE, 20);
-  const cardOpacity = opacity ?? (appointment.isParked ? 0.9 : 1);
-  const hasProcessTime =
-    appointment.processingTimeStart != null &&
-    appointment.processingTimeEnd != null &&
-    appointment.processingTimeStart < appointment.processingTimeEnd;
-  const processStartTime = hasProcessTime
-    ? new Date(appointment.startTime.getTime() + appointment.processingTimeStart! * 60 * 1000)
-    : null;
-  const processEndTime = hasProcessTime
-    ? new Date(appointment.startTime.getTime() + appointment.processingTimeEnd! * 60 * 1000)
-    : null;
-
-  return (
-    <View style={[styles.appointmentCard, { height, opacity: cardOpacity }]}>
-        <View style={[StyleSheet.absoluteFill, styles.appointmentBackground, { backgroundColor: colors.gradient[0] }]} />
-        <View style={[styles.appointmentIndicator, { backgroundColor: colors.indicator }]} />
-        <View style={styles.appointmentContent}>
-          <View style={styles.appointmentDetails}>
-            <Text style={[styles.appointmentClientName, { color: colors.text }]} numberOfLines={1}>{appointment.clientName}</Text>
-            <Text style={[styles.appointmentService, { color: colors.serviceText }]} numberOfLines={1}>{appointment.service}</Text>
-          </View>
-          {appointment.hasAlarm && (
-            <View style={styles.appointmentTimeContainer}>
-              <AlarmIcon color={colors.indicator} />
-              <Text style={[styles.appointmentTime, { color: '#FFFFFF' }]}>
-                {format(appointment.startTime, 'h:mm')} - {format(appointment.endTime, 'h:mm a').toUpperCase()}
-              </Text>
-            </View>
-          )}
-          {hasProcessTime && processStartTime && processEndTime && (
-            <Text style={[styles.appointmentProcessTime, { color: colors.serviceText }]} numberOfLines={1}>
-              Process {format(processStartTime, 'h:mm')}–{format(processEndTime, 'h:mm')}
-            </Text>
-          )}
-        </View>
-      </View>
-  );
-};
 
 const TimeLabel = ({ time }: { time: string }) => (
   <View style={styles.timeLabel}>
@@ -255,10 +179,10 @@ interface PositionedAppointment {
 function layoutAppointmentsInSlot(appointments: Appointment[]): PositionedAppointment[] {
   if (appointments.length === 0) return [];
 
-  const sorted = [...appointments].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+  const sortedByEndTime = [...appointments].sort((a, b) => b.endTime.getTime() - a.endTime.getTime());
   const columns: Appointment[][] = [];
 
-  for (const apt of sorted) {
+  for (const apt of sortedByEndTime) {
     let placed = false;
     for (let i = 0; i < columns.length; i++) {
       const hasOverlap = columns[i].some(
@@ -294,7 +218,8 @@ function layoutAppointmentsInSlot(appointments: Appointment[]): PositionedAppoin
     .filter((i) => !adjacentOnlyColumns.has(i));
   const numOverlapCols = overlapColumns.length;
 
-  return sorted.map((apt) => {
+  const sortedByStart = [...appointments].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+  return sortedByStart.map((apt) => {
     const colIndex = columns.findIndex((col) => col.includes(apt));
     const minutesOffset = apt.startTime.getMinutes() + apt.startTime.getSeconds() / 60;
     const top = minutesOffset * PIXELS_PER_MINUTE;
@@ -540,7 +465,7 @@ const DraggableAppointmentCard = ({
     <View style={styles.appointmentWithResize}>
       <GestureDetector gesture={composed}>
         <View style={{ opacity: isDragging ? 0.4 : 1 }}>
-          <AppointmentCardInner appointment={appointment} />
+          <AppointmentCard appointment={appointment} />
         </View>
       </GestureDetector>
       {onResizeEnd && (
@@ -602,7 +527,7 @@ const NonDraggableAppointmentCard = ({
     <View style={styles.appointmentWithResize}>
       <GestureDetector gesture={tapCombo}>
         <View>
-          <AppointmentCardInner appointment={appointment} />
+          <AppointmentCard appointment={appointment} />
         </View>
       </GestureDetector>
       {onResizeEnd && (
@@ -623,19 +548,7 @@ const NonDraggableAppointmentCard = ({
 const TimeSlot = ({
   hour,
   selectedDate,
-  appointments,
-  onAppointmentPress,
-  onAppointmentDoubleTap,
-  onAppointmentDragStart,
-  onAppointmentDragMove,
-  onAppointmentDragEnd,
-  onAppointmentDragCancel,
-  onResizeStart,
-  onResizeMove,
-  onResizeEnd,
-  onResizeTerminate,
   onEmptySlotPress,
-  draggedAppointmentId,
   showCurrentTime,
   hideLabel,
   currentTimePosition,
@@ -644,19 +557,7 @@ const TimeSlot = ({
 }: {
   hour: number;
   selectedDate: Date;
-  appointments: Appointment[];
-  onAppointmentPress?: (appointment: Appointment) => void;
-  onAppointmentDoubleTap?: (appointment: Appointment) => void;
-  onAppointmentDragStart?: (apt: Appointment, fingerX: number, fingerY: number) => void;
-  onAppointmentDragMove?: (x: number, y: number) => void;
-  onAppointmentDragEnd?: (x: number, y: number) => void;
-  onAppointmentDragCancel?: () => void;
-  onResizeStart?: () => void;
-  onResizeMove?: (apt: Appointment, y: number, edge: 'top' | 'bottom') => void;
-  onResizeEnd?: (apt: Appointment, dropY: number, edge: 'top' | 'bottom') => void;
-  onResizeTerminate?: () => void;
   onEmptySlotPress?: (date: Date, hour: number) => void;
-  draggedAppointmentId?: string | null;
   showCurrentTime?: boolean;
   hideLabel?: boolean;
   currentTimePosition?: number;
@@ -665,18 +566,13 @@ const TimeSlot = ({
 }) => {
   const timeString = hour === 0 ? '12:00' : hour > 12 ? `${hour - 12}:00` : `${hour}:00`;
   const displayTime = hour < 10 ? `0${timeString}` : timeString;
-  const isDraggable = Boolean(onAppointmentDragStart);
-
-  const positionedAppointments = layoutAppointmentsInSlot(appointments);
-  const toRender = positionedAppointments.filter((p) => p.appointment.startTime.getHours() === hour);
-  const isOverbookedSlot = toRender.length > 0 && positionedAppointments.length > 0 && positionedAppointments[0].totalColumns > 1;
 
   return (
-    <View style={[styles.timeSlot, isOverbookedSlot && styles.timeSlotOverbooked]}>
+    <View style={styles.timeSlot}>
       {!hideLabel && (
-      <View style={styles.timeLabelRow}>
-        <TimeLabel time={displayTime} />
-      </View>
+        <View style={styles.timeLabelRow}>
+          <TimeLabel time={displayTime} />
+        </View>
       )}
       <View style={[styles.timeSlotContent, hideLabel && styles.timeSlotContentNoLabel]}>
         {onEmptySlotPress && (
@@ -686,57 +582,6 @@ const TimeSlot = ({
           />
         )}
         <TimeLine />
-        {toRender.map(({ appointment: apt, totalColumns, top, usesFullWidth, overlapColIdx, numOverlapCols }) => {
-          const isOverbooked = totalColumns > 1 && !usesFullWidth;
-          const hasAdjacentColumns = numOverlapCols < totalColumns;
-          const OVERLAP_AREA_PERCENT = hasAdjacentColumns ? 50 : 100;
-          const overlapGap = numOverlapCols > 1 ? 4 : 0;
-          const overlapWidth = numOverlapCols > 0 ? (OVERLAP_AREA_PERCENT - overlapGap * (numOverlapCols - 1)) / numOverlapCols : 0;
-          const leftPercent = usesFullWidth ? 0 : hasAdjacentColumns ? 50 + overlapColIdx * (overlapWidth + overlapGap) : overlapColIdx * (overlapWidth + overlapGap);
-          const widthPercent = usesFullWidth ? 100 : overlapWidth;
-          return (
-            <View
-              key={apt.id}
-              style={[
-                styles.appointmentWrapper,
-                isOverbooked && !usesFullWidth && styles.appointmentWrapperOverbooked,
-                {
-                  top,
-                  left: `${leftPercent}%`,
-                  width: `${widthPercent}%`,
-                  right: undefined,
-                },
-              ]}
-            >
-              {isDraggable ? (
-                <DraggableAppointmentCard
-                  appointment={apt}
-                  onSingleTap={() => onAppointmentPress?.(apt)}
-                  onDoubleTap={() => onAppointmentDoubleTap?.(apt)}
-                  onDragStart={onAppointmentDragStart!}
-                  onDragMove={onAppointmentDragMove!}
-                  onDragEnd={onAppointmentDragEnd!}
-                  onDragCancel={onAppointmentDragCancel}
-                  onResizeStart={onResizeStart ?? (() => {})}
-                  onResizeMove={onResizeMove ? (y, edge) => onResizeMove!(apt, y, edge) : undefined}
-                  onResizeEnd={onResizeEnd ? (y, edge) => onResizeEnd(apt, y, edge) : undefined}
-                  onResizeTerminate={onResizeTerminate}
-                  isDragging={draggedAppointmentId === apt.id}
-                />
-              ) : (
-                <NonDraggableAppointmentCard
-                  appointment={apt}
-                  onSingleTap={() => onAppointmentPress?.(apt)}
-                  onDoubleTap={() => onAppointmentDoubleTap?.(apt)}
-                  onResizeStart={onResizeStart ?? (() => {})}
-                  onResizeMove={onResizeMove ? (y) => onResizeMove(apt, y, 'bottom') : undefined}
-                  onResizeEnd={onResizeEnd ? (y) => onResizeEnd(apt, y, 'bottom') : undefined}
-                  onResizeTerminate={onResizeTerminate}
-                />
-              )}
-            </View>
-          );
-        })}
         {showIndicator && showCurrentTime && currentTimePosition !== undefined && currentTime && (
           <View style={[styles.currentTimeWrapper, { top: currentTimePosition }]}>
             <CurrentTimeIndicator time={currentTime} />
@@ -1130,26 +975,77 @@ function CalendarMiddleSectionInner(
             key={hour}
             hour={hour}
             selectedDate={selectedDate}
-            appointments={appointmentsByHourWithResize[hour] || []}
-            onAppointmentPress={onAppointmentPress}
-            onAppointmentDoubleTap={onAppointmentDoubleTap}
-            onAppointmentDragStart={hasDragCallbacks ? handleDragStart : undefined}
-            onAppointmentDragMove={hasDragCallbacks ? handleDragMove : undefined}
-            onAppointmentDragEnd={hasDragCallbacks ? handleDragEnd : undefined}
-            onAppointmentDragCancel={hasDragCallbacks ? handleDragCancel : undefined}
-            onResizeStart={onResizeAppointment ? handleResizeStart : () => {}}
-            onResizeMove={onResizeAppointment ? handleResizeMove : undefined}
-            onResizeEnd={onResizeAppointment ? handleResizeEnd : undefined}
-            onResizeTerminate={onResizeAppointment ? handleResizeTerminate : undefined}
             onEmptySlotPress={onEmptySlotPress}
-            draggedAppointmentId={draggedAppointment?.id ?? null}
             showCurrentTime={hour === currentTimeInfo.hour}
+            hideLabel
             currentTimePosition={currentTimeInfo.position}
             showIndicator={showCurrentTimeIndicator}
             currentTime={currentTime}
-            hideLabel
           />
         ))}
+        {!isWeekColumn && (
+          <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
+            {timeSlots.flatMap((hour) => {
+            const appointments = appointmentsByHourWithResize[hour] || [];
+            const positioned = layoutAppointmentsInSlot(appointments);
+            const toRender = positioned.filter((p) => p.appointment.startTime.getHours() === hour);
+            const baseTop = (hour - DAY_START_HOUR) * SLOT_HEIGHT;
+            return toRender.map(({ appointment: apt, totalColumns, top, usesFullWidth, overlapColIdx, numOverlapCols }, index) => {
+              const isOverbooked = totalColumns > 1 && !usesFullWidth;
+              const hasAdjacentColumns = numOverlapCols < totalColumns;
+              const OVERLAP_AREA_PERCENT = hasAdjacentColumns ? 50 : 100;
+              const overlapGap = numOverlapCols > 1 ? 4 : 0;
+              const overlapWidth = numOverlapCols > 0 ? (OVERLAP_AREA_PERCENT - overlapGap * (numOverlapCols - 1)) / numOverlapCols : 0;
+              const leftPercent = usesFullWidth ? 0 : hasAdjacentColumns ? 50 + overlapColIdx * (overlapWidth + overlapGap) : overlapColIdx * (overlapWidth + overlapGap);
+              const widthPercent = usesFullWidth ? 100 : overlapWidth;
+              const absoluteTop = baseTop + top;
+              return (
+                <View
+                  key={`${hour}-${apt.id}-${index}`}
+                  style={[
+                    styles.appointmentWrapper,
+                    isOverbooked && !usesFullWidth && styles.appointmentWrapperOverbooked,
+                    {
+                      position: 'absolute',
+                      top: absoluteTop,
+                      left: `${leftPercent}%`,
+                      width: `${widthPercent}%`,
+                      right: undefined,
+                    },
+                  ]}
+                >
+                  {hasDragCallbacks ? (
+                    <DraggableAppointmentCard
+                      appointment={apt}
+                      onSingleTap={() => onAppointmentPress?.(apt)}
+                      onDoubleTap={() => onAppointmentDoubleTap?.(apt)}
+                      onDragStart={handleDragStart}
+                      onDragMove={handleDragMove}
+                      onDragEnd={handleDragEnd}
+                      onDragCancel={handleDragCancel}
+                      onResizeStart={onResizeAppointment ? handleResizeStart : () => {}}
+                      onResizeMove={onResizeAppointment ? (y, edge) => handleResizeMove(apt, y, edge) : undefined}
+                      onResizeEnd={onResizeAppointment ? (y, edge) => handleResizeEnd(apt, y, edge) : undefined}
+                      onResizeTerminate={handleResizeTerminate}
+                      isDragging={draggedAppointment?.id === apt.id}
+                    />
+                  ) : (
+                    <NonDraggableAppointmentCard
+                      appointment={apt}
+                      onSingleTap={() => onAppointmentPress?.(apt)}
+                      onDoubleTap={() => onAppointmentDoubleTap?.(apt)}
+                      onResizeStart={onResizeAppointment ? handleResizeStart : () => {}}
+                      onResizeMove={onResizeAppointment ? (y) => handleResizeMove(apt, y, 'bottom') : undefined}
+                      onResizeEnd={onResizeAppointment ? (y) => handleResizeEnd(apt, y, 'bottom') : undefined}
+                      onResizeTerminate={handleResizeTerminate}
+                    />
+                  )}
+                </View>
+              );
+            });
+            })}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -1373,18 +1269,6 @@ const styles = StyleSheet.create({
     borderLeftColor: '#FFC107',
     borderRadius: 2,
   },
-  appointmentCard: { flexDirection: 'row', gap: ms(6), paddingLeft: ms(4), paddingRight: ms(8), paddingVertical: ms(4), borderRadius: ms(4), overflow: 'hidden', position: 'relative', width: '100%' },
-  appointmentBackground: { borderRadius: ms(4) },
-  appointmentIndicator: { width: ms(5), height: ms(5), borderRadius: ms(2.5), alignSelf: 'center' },
-  appointmentContent: { flex: 1, gap: ms(8) },
-  appointmentDetails: { flex: 1, gap: ms(5) },
-  appointmentClientName: { fontFamily: 'Lato-SemiBold', fontSize: ms(13), lineHeight: ms(13), textTransform: 'capitalize' as const },
-  appointmentService: { fontFamily: 'Lato-SemiBold', fontSize: ms(13), lineHeight: ms(13) },
-  appointmentTimeContainer: { flexDirection: 'row', alignItems: 'center', gap: ms(2), marginBottom: hp(1.2) },
-  appointmentTime: { fontFamily: 'Lato-Medium', fontSize: ms(8), lineHeight: ms(8), textTransform: 'uppercase' as const },
-  appointmentProcessTime: { fontFamily: 'Lato-Medium', fontSize: ms(8), lineHeight: ms(8), opacity: 0.9 },
-  alarmIcon: { width: ms(12), height: ms(12), overflow: 'hidden', position: 'relative' },
-  alarmIconInner: { position: 'absolute', left: '10.27%', right: '10.26%', top: '9.24%', bottom: '8.33%' },
   currentTimeWrapper: { position: 'absolute' as const, left: -(ms(28) + wp(3) + 12), right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', overflow: 'visible' as const },
   currentTimeIndicator: { flexDirection: 'row', alignItems: 'center', height: 24, flex: 1, minWidth: 0 },
   currentTimeBadge: {

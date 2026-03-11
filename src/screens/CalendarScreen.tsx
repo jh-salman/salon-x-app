@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, StyleSheet, Modal, Text, Pressable, ScrollView, Animated, Easing, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Modal, Text, Pressable, ScrollView, Animated, Easing, useWindowDimensions, Alert } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import { isSameDay, format, addDays, subDays, addWeeks } from 'date-fns';
 import CalendarHeaderDynamic, { type ViewMode } from '../components/CalendarHeaderDynamic';
 import { RightDecoration } from '../components/RightDecoration';
+import { LeftDecoration } from '../components/LeftDecoration';
 import { AllDaySection, type ParkZoneBounds, type CalendarLayout, type UnparkDragGhost } from '../components/AllDaySection';
 import CalendarMiddleSection, { type Appointment, type AllDayAppointment, type CalendarMiddleSectionRef } from '../components/CalendarMiddleSection';
 import CalendarWeekView, { type CalendarWeekViewRef } from '../components/CalendarWeekView';
@@ -16,6 +17,7 @@ import { AppointmentOptionsModal } from '../components/AppointmentOptionsModal';
 import { GlassConfirmModal } from '../components/GlassConfirmModal';
 import { useEvents } from '../context/EventsContext';
 import type { CalendarEvent } from '../data/events';
+import { wouldCauseThirdOverlap } from '../utils/overbookCheck';
 import { ms, vs } from '../utils/responsive';
 import { haptics } from '../utils/haptics';
 
@@ -112,6 +114,8 @@ export function CalendarScreen() {
           isParked: true,
           waitlistAddedAt: e.waitlistAddedAt,
           service: e.service || e.clientName || undefined,
+          start: e.start,
+          end: e.end,
         })),
     [events]
   );
@@ -148,6 +152,8 @@ export function CalendarScreen() {
         isParked: false,
         waitlistAddedAt: e.waitlistAddedAt,
         service: e.service || e.clientName || undefined,
+        start: e.start,
+        end: e.end,
       }));
     return [...parkedEvents, ...waitlist];
   }, [events, parkedEvents]);
@@ -290,8 +296,7 @@ export function CalendarScreen() {
               ...e,
               allDay: true,
               isParked: true,
-              start: dayjs(currentDate).hour(0).minute(0).toDate(),
-              end: dayjs(currentDate).hour(0).minute(0).toDate(),
+              /* keep start/end so unpark to another day preserves service duration */
             }
           : e
       )
@@ -299,19 +304,58 @@ export function CalendarScreen() {
   };
 
   const handleMoveAppointment = (id: string, newStart: Date, newEnd: Date) => {
-    setEvents((prev) =>
-      prev.map((e) =>
+    setEvents((prev) => {
+      if (wouldCauseThirdOverlap(prev, newStart, newEnd, id)) {
+        setTimeout(
+          () =>
+            Alert.alert(
+              'Cannot overbook',
+              'This slot cannot be overbooked again. Maximum two appointments can overlap.'
+            ),
+          0
+        );
+        return prev;
+      }
+      const moved = prev.find((e) => e.id === id);
+      if (!moved) return prev;
+      const seriesId = moved.seriesId;
+      const deltaMs = newStart.getTime() - moved.start.getTime();
+      if (seriesId) {
+        return prev.map((e) => {
+          if (e.id === id) {
+            return { ...e, start: newStart, end: newEnd, allDay: false, isParked: false, waitlistAddedAt: undefined };
+          }
+          if (e.seriesId === seriesId) {
+            const start = new Date(e.start.getTime() + deltaMs);
+            const end = new Date(e.end.getTime() + deltaMs);
+            return { ...e, start, end, allDay: false, isParked: false, waitlistAddedAt: undefined };
+          }
+          return e;
+        });
+      }
+      return prev.map((e) =>
         e.id === id
           ? { ...e, start: newStart, end: newEnd, allDay: false, isParked: false, waitlistAddedAt: undefined }
           : e
-      )
-    );
+      );
+    });
   };
 
   const handleResizeAppointment = (id: string, newStart: Date, newEnd: Date) => {
-    setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, start: newStart, end: newEnd } : e))
-    );
+    setEvents((prev) => {
+      if (wouldCauseThirdOverlap(prev, newStart, newEnd, id)) {
+        setTimeout(
+          () =>
+            Alert.alert(
+              'Cannot overbook',
+              'This slot cannot be overbooked again. Maximum two appointments can overlap.'
+            ),
+          0
+        );
+        return prev;
+      }
+      return prev.map((e) => (e.id === id ? { ...e, start: newStart, end: newEnd } : e));
+    });
   };
 
   const handleNotifyClient = (id: string) => {
@@ -368,6 +412,7 @@ export function CalendarScreen() {
           onViewModeChange={setViewMode}
           viewMode={viewMode}
         />
+        <LeftDecoration />
         <RightDecoration date={currentDate} />
         {viewMode === 'day' && (
           <>

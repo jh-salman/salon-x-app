@@ -49,6 +49,39 @@ function ev(
   };
 }
 
+/** Generate repeat-style mock events: same client, same service, same time, each occurrence on a later date (e.g. every 1 week). */
+function repeatMockEvents(
+  baseId: string,
+  clientName: string,
+  serviceName: string,
+  startDate: dayjs.Dayjs,
+  startH: number,
+  durationMinutes: number,
+  intervalWeeks: number,
+  count: number,
+  color: string = '#25AFFF'
+): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+  const seriesId = `series-${baseId}-${startDate.valueOf()}`;
+  for (let i = 0; i < count; i++) {
+    const date = startDate.add(i * intervalWeeks, 'week');
+    const start = date.hour(startH).minute(0).second(0).millisecond(0).toDate();
+    const end = date.hour(startH).minute(durationMinutes).second(0).millisecond(0).toDate();
+    events.push({
+      id: `${baseId}-${i + 1}`,
+      title: clientName,
+      clientName: serviceName,
+      service: serviceName,
+      seriesId,
+      start,
+      end,
+      allDay: false,
+      color,
+    });
+  }
+  return events;
+}
+
 /** Event title = client name. clientName in ev() = service description on calendar. */
 export const MOCK_EVENTS: CalendarEvent[] = [
   // Today – timed
@@ -97,23 +130,23 @@ export const MOCK_EVENTS: CalendarEvent[] = [
   ev('ev-9', 'Amy Park', dayjs(), { allDay: true, color: '#FF7701' }),
   // Waitlist (all-day, not parked)
   {
-    ...ev('ev-10', 'Ben Wu', dayjs(), { allDay: true, color: '#9DE684', service: 'Color' }),
+    ...ev('ev-10', 'Ben Wu', dayjs(), { allDay: true, color: '#25AFFF', service: 'Color' }),
     waitlistAddedAt: dayjs().subtract(2, 'hour').toDate().getTime(),
   },
   {
-    ...ev('ev-w1', 'Chris Lee', dayjs(), { allDay: true, color: '#9DE684', service: 'Cut' }),
+    ...ev('ev-w1', 'Chris Lee', dayjs(), { allDay: true, color: '#25AFFF', service: 'Cut' }),
     waitlistAddedAt: dayjs().subtract(1, 'hour').toDate().getTime(),
   },
   {
-    ...ev('ev-w2', 'Taylor Smith', dayjs(), { allDay: true, color: '#9DE684', service: 'Perm' }),
+    ...ev('ev-w2', 'Taylor Smith', dayjs(), { allDay: true, color: '#25AFFF', service: 'Perm' }),
     waitlistAddedAt: dayjs().subtract(45, 'minute').toDate().getTime(),
   },
   {
-    ...ev('ev-w3', 'Jordan Kim', dayjs(), { allDay: true, color: '#9DE684', service: 'Highlights' }),
+    ...ev('ev-w3', 'Jordan Kim', dayjs(), { allDay: true, color: '#25AFFF', service: 'Highlights' }),
     waitlistAddedAt: dayjs().subtract(30, 'minute').toDate().getTime(),
   },
   {
-    ...ev('ev-w4', 'Sam Davis', dayjs(), { allDay: true, color: '#9DE684', service: 'Balayage' }),
+    ...ev('ev-w4', 'Sam Davis', dayjs(), { allDay: true, color: '#25AFFF', service: 'Balayage' }),
     waitlistAddedAt: dayjs().subtract(15, 'minute').toDate().getTime(),
   },
   // Tomorrow
@@ -150,6 +183,18 @@ export const MOCK_EVENTS: CalendarEvent[] = [
     endH: 17,
     color: '#FA1BFE',
   }),
+  // Repeat mock: Mary – Haircut every week, same time (2:00 PM), 5 occurrences
+  ...repeatMockEvents(
+    'ev-repeat',
+    'Mary Wilson',
+    'Haircut',
+    dayjs().hour(14).minute(0).second(0).millisecond(0),
+    14,
+    60,
+    1,
+    5,
+    '#9DE684'
+  ),
 ];
 
 // ---- Services ----

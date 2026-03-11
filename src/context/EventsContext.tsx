@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CalendarEvent } from '../data/events';
 import { MOCK_EVENTS } from '../data/events';
@@ -25,6 +25,7 @@ interface EventsContextType {
   events: CalendarEvent[];
   setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
   addEvent: (event: Omit<CalendarEvent, 'id'>) => void;
+  updateEvent: (id: string, updates: Partial<Omit<CalendarEvent, 'id'>>) => void;
 }
 
 const EventsContext = createContext<EventsContextType | null>(null);
@@ -32,6 +33,7 @@ const EventsContext = createContext<EventsContextType | null>(null);
 export function EventsProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<CalendarEvent[]>(MOCK_EVENTS);
   const [hydrated, setHydrated] = useState(false);
+  const idCounterRef = useRef(0);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((json) => {
@@ -65,12 +67,18 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   }, [events, hydrated]);
 
   const addEvent = (event: Omit<CalendarEvent, 'id'>) => {
-    const id = `ev-${Date.now()}`;
+    const id = `ev-${Date.now()}-${++idCounterRef.current}`;
     setEvents((prev) => [...prev, { ...event, id }]);
   };
 
+  const updateEvent = (id: string, updates: Partial<Omit<CalendarEvent, 'id'>>) => {
+    setEvents((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
+    );
+  };
+
   return (
-    <EventsContext.Provider value={{ events, setEvents, addEvent }}>
+    <EventsContext.Provider value={{ events, setEvents, addEvent, updateEvent }}>
       {hydrated ? children : <LoadingScreen />}
     </EventsContext.Provider>
   );

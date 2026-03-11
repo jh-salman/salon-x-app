@@ -30,7 +30,7 @@ interface CalendarWeekViewProps {
   onNotifyClient?: (id: string) => void;
   onDragOverParkZone?: (isOver: boolean) => void;
   onEmptySlotPress?: (date: Date, hour: number) => void;
-  /** Date strings (yyyy-MM-dd) for days that have someone on waitlist; show orange/green indicator */
+  /** Date strings (yyyy-MM-dd) for days that have someone on waitlist; show blue indicator */
   waitlistDays?: string[];
   /** Called when user taps the waitlist indicator; show "Choose a day to drop an appointment by clicking on it" */
   onWaitlistPress?: () => void;
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   dayHeader: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#111', alignItems: 'center', height: WEEK_VIEW_HEADER_HEIGHT },
   dayHeaderTop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dayLabel: { fontSize: 10, color: '#FFFFFF', fontWeight: '600' },
-  waitlistIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#9DE684' },
+  waitlistIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#25AFFF' },
   dayLabelToday: { color: '#25afff' },
   dateNum: { fontSize: 18, color: 'white', fontWeight: '600', marginTop: 2 },
   dateNumSelected: { color: '#25afff' },

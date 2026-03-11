@@ -7,9 +7,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Switch,
   TextInput,
+  Modal,
+  Pressable,
+  Platform,
+  InteractionManager,
+  Alert,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
@@ -17,6 +22,7 @@ import dayjs from 'dayjs';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, G } from 'react-native-svg';
 import { useEvents } from '../context/EventsContext';
+import { wouldCauseThirdOverlap } from '../utils/overbookCheck';
 import { useServices } from '../context/ServicesContext';
 import { useClients } from '../context/ClientsContext';
 import { CustomerDropdown, type CustomerOption } from '../components/CustomerDropdown';
@@ -26,12 +32,31 @@ import { wp, hp, ms, vs } from '../utils/responsive';
 
 export function NewAppointmentScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ date?: string; hour?: string }>();
-  const { addEvent } = useEvents();
+  const params = useLocalSearchParams<{
+    date?: string;
+    hour?: string;
+    repeatEnabled?: string;
+    endTime?: string;
+    intervalUnit?: string;
+    intervalValue?: string;
+    rebook?: string;
+    clientName?: string;
+    serviceName?: string;
+    clientId?: string;
+    serviceId?: string;
+    suggestedDate?: string;
+    duration?: string;
+    appointmentId?: string;
+  }>();
+  const { events, addEvent, updateEvent } = useEvents();
   const { services, lastAddedService, clearLastAddedService } = useServices();
   const { clients, lastAddedClient, clearLastAddedClient } = useClients();
 
+  const [bookSingleOnly, setBookSingleOnly] = useState(true);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatEndDate, setRepeatEndDate] = useState<Date | null>(null);
+  const [repeatIntervalUnit, setRepeatIntervalUnit] = useState<'day' | 'week' | 'month'>('week');
+  const [repeatIntervalValue, setRepeatIntervalValue] = useState(1);
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [triggerLayout, setTriggerLayout] = useState<{ x: number; y: number; width: number; height: number } | undefined>();
@@ -47,9 +72,16 @@ export function NewAppointmentScreen() {
   const [notes, setNotes] = useState('');
 
   const [startDate, setStartDate] = useState<Date>(() => new Date());
+  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState<Date>(() => new Date());
   const appliedFromContextRef = useRef(false);
+  const modifyPreFillRef = useRef(false);
+  const hasBookedRef = useRef(false);
+  const bookingInProgressRef = useRef(false);
+  const eventsRef = useRef(events);
   const lastAddedClientRef = useRef(lastAddedClient);
   const lastAddedServiceRef = useRef(lastAddedService);
+  eventsRef.current = events;
   lastAddedClientRef.current = lastAddedClient;
   lastAddedServiceRef.current = lastAddedService;
 
@@ -57,11 +89,85 @@ export function NewAppointmentScreen() {
     useCallback(() => {
       setCustomerDropdownOpen(false);
       setServiceDropdownOpen(false);
-      if (params?.date && params?.hour) {
+      if (params?.appointmentId) {
+        const ev = events.find((e) => e.id === params.appointmentId);
+        if (ev) {
+          modifyPreFillRef.current = true;
+          const matchClient = clients.find((c) => c.name === ev.title);
+          setCustomer(matchClient ?? { id: `temp-${ev.id}`, name: ev.title });
+          const bookedServiceName = (ev.service || ev.clientName || '').trim();
+          const matchService = services.find(
+            (s) => s.name.trim().toLowerCase() === bookedServiceName.toLowerCase()
+          );
+          setSelectedService(
+            matchService ?? {
+              id: `temp-${ev.id}`,
+              name: bookedServiceName || 'Service',
+              calendarColor: ev.color ?? '#25AFFF',
+              processingTimeStart: ev.processingTimeStart,
+              processingTimeEnd: ev.processingTimeEnd,
+            } as ServiceOption
+          );
+          setStartDate(new Date(ev.start));
+          const durMs = ev.end.getTime() - ev.start.getTime();
+          setDuration(String(Math.round(durMs / 60000)));
+          if (ev.notes != null && ev.notes !== '') setNotes(String(ev.notes));
+          if (ev.price != null) setPrice(typeof ev.price === 'number' ? String(ev.price) : String(ev.price));
+        }
+      } else if (params?.rebook === '1' && params?.clientName) {
+        const matchClient = clients.find((c) => c.name === params.clientName);
+        if (matchClient) setCustomer(matchClient);
+        const matchService = services.find((s) => s.name === params.serviceName);
+        if (matchService) setSelectedService(matchService);
+        if (params.suggestedDate) {
+          const d = new Date(params.suggestedDate);
+          if (!isNaN(d.getTime())) setStartDate(d);
+        }
+        const dur = params.duration ? parseInt(String(params.duration), 10) : undefined;
+        if (dur != null && !isNaN(dur)) setDuration(String(dur));
+      } else if (params?.date && params?.hour) {
         const d = new Date(params.date);
         const hour = parseInt(String(params.hour), 10) || 9;
         d.setHours(hour, 0, 0, 0);
         setStartDate(d);
+      }
+      if (params?.repeatEnabled !== undefined && (params?.clientName || params?.serviceName)) {
+        if (params.clientName) {
+          const matchClient = clients.find((c) => c.name === params.clientName);
+          setCustomer(matchClient ?? { id: params.clientId ?? `temp-${Date.now()}`, name: params.clientName });
+        }
+        if (params.serviceName) {
+          const matchService = services.find(
+            (s) => s.name.trim().toLowerCase() === params.serviceName!.trim().toLowerCase()
+          );
+          setSelectedService(
+            matchService ?? {
+              id: params.serviceId ?? `temp-${Date.now()}`,
+              name: params.serviceName,
+              calendarColor: '#25AFFF',
+            } as ServiceOption
+          );
+        }
+        if (params.duration) {
+          const dur = parseInt(String(params.duration), 10);
+          if (!isNaN(dur)) setDuration(String(dur));
+        }
+        setBookSingleOnly(params?.repeatEnabled !== '1');
+      }
+      if (params?.repeatEnabled === '1' && params?.endTime) {
+        setRepeatEnabled(true);
+        const end = new Date(params.endTime);
+        if (!isNaN(end.getTime())) setRepeatEndDate(end);
+        if (params?.intervalUnit === 'day' || params?.intervalUnit === 'week' || params?.intervalUnit === 'month') {
+          setRepeatIntervalUnit(params.intervalUnit);
+        }
+        const v = parseInt(String(params?.intervalValue ?? '1'), 10);
+        if (!isNaN(v) && v >= 1) setRepeatIntervalValue(v);
+      } else if (params?.repeatEnabled === '0') {
+        setRepeatEnabled(false);
+        setRepeatEndDate(null);
+        setRepeatIntervalUnit('week');
+        setRepeatIntervalValue(1);
       }
       const timer = setTimeout(() => {
         const pendingClient = lastAddedClientRef.current;
@@ -77,9 +183,17 @@ export function NewAppointmentScreen() {
           appliedFromContextRef.current = true;
         }
         if (!pendingClient && !pendingService) {
+          if (hasBookedRef.current) {
+            hasBookedRef.current = false;
+            return;
+          }
           if (appliedFromContextRef.current) {
             appliedFromContextRef.current = false;
-          } else {
+          } else if (
+            params?.repeatEnabled === undefined &&
+            params?.rebook !== '1' &&
+            !params?.appointmentId
+          ) {
             setCustomer(null);
             setSelectedService(null);
             setPrice('');
@@ -87,7 +201,11 @@ export function NewAppointmentScreen() {
             setAppointmentType('');
             setDepositDue('50%');
             setNotes('');
+            setBookSingleOnly(true);
             setRepeatEnabled(false);
+            setRepeatEndDate(null);
+            setRepeatIntervalUnit('week');
+            setRepeatIntervalValue(1);
             if (!params?.date || !params?.hour) {
               setStartDate(new Date());
             }
@@ -95,10 +213,14 @@ export function NewAppointmentScreen() {
         }
       }, 80);
       return () => clearTimeout(timer);
-    }, [params?.date, params?.hour, clearLastAddedClient, clearLastAddedService])
+    }, [params?.date, params?.hour, params?.rebook, params?.clientName, params?.serviceName, params?.suggestedDate, params?.duration, params?.appointmentId, params?.repeatEnabled, params?.endTime, params?.intervalUnit, params?.intervalValue, clients, services, clearLastAddedClient, clearLastAddedService])
   );
 
   useEffect(() => {
+    if (modifyPreFillRef.current) {
+      modifyPreFillRef.current = false;
+      return;
+    }
     if (selectedService) {
       if (selectedService.price != null) setPrice(String(selectedService.price));
       const clientDur = selectedService.duration ?? 60;
@@ -123,21 +245,79 @@ export function NewAppointmentScreen() {
   };
 
   const handleBook = () => {
+    if (bookingInProgressRef.current) return;
+    bookingInProgressRef.current = true;
+    hasBookedRef.current = true;
+
     const clientName = customer?.name || 'New Customer';
     const serviceName = selectedService?.name || 'Service';
-    addEvent({
+    const customerId = customer?.id;
+    const serviceId = selectedService?.id;
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const priceNum = price ? (typeof price === 'string' ? parseFloat(price) : price) : undefined;
+    const basePayload = {
       title: clientName,
       clientName: serviceName,
       service: serviceName,
-      start: startDate,
-      end: endDate,
+      customerId,
+      serviceId,
       color: selectedService?.calendarColor ?? '#25AFFF',
       allDay: false,
       processingTimeStart: selectedService?.processingTimeStart,
       processingTimeEnd: selectedService?.processingTimeEnd,
+      notes: notes || undefined,
+      price: priceNum,
+    };
+
+    const showOverbookAlert = () => {
+      Alert.alert('Cannot overbook', 'This slot cannot be overbooked again. Maximum two appointments can overlap.');
+      bookingInProgressRef.current = false;
+      hasBookedRef.current = false;
+    };
+
+    if (params?.appointmentId) {
+      updateEvent(params.appointmentId, {
+        ...basePayload,
+        start: startDate,
+        end: endDate,
+      });
+    } else if (!bookSingleOnly && repeatEnabled && repeatEndDate) {
+      const endOfEndDate = new Date(repeatEndDate);
+      endOfEndDate.setHours(23, 59, 59, 999);
+      const intervalValue = Math.max(1, repeatIntervalValue);
+      const baseStartTime = new Date(startDate.getTime());
+      const seriesId = `series-${Date.now()}`;
+      const currentEvents = eventsRef.current;
+      const runningEvents: { id?: string; start: Date; end: Date; allDay?: boolean }[] = currentEvents
+        .filter((e) => !e.allDay && e.start && e.end)
+        .map((e) => ({ id: e.id, start: e.start, end: e.end, allDay: e.allDay }));
+      for (let i = 0; ; i++) {
+        const start = dayjs(baseStartTime).add(i * intervalValue, repeatIntervalUnit).toDate();
+        if (start.getTime() > endOfEndDate.getTime()) break;
+        const end = new Date(start.getTime() + durationMs);
+        if (wouldCauseThirdOverlap(runningEvents, start, end)) {
+          showOverbookAlert();
+          return;
+        }
+        addEvent({ ...basePayload, seriesId, start, end });
+        runningEvents.push({ id: `temp-${i}`, start, end, allDay: false });
+      }
+    } else {
+      if (wouldCauseThirdOverlap(eventsRef.current, startDate, endDate)) {
+        showOverbookAlert();
+        return;
+      }
+      addEvent({ ...basePayload, start: startDate, end: endDate });
+    }
+    InteractionManager.runAfterInteractions(() => {
+      router.back();
+      setTimeout(() => {
+        bookingInProgressRef.current = false;
+      }, 500);
     });
-    router.back();
   };
+
+  const isModifyMode = Boolean(params?.appointmentId);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -168,7 +348,7 @@ export function NewAppointmentScreen() {
               </G>
             </Svg>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>New Appointment</Text>
+          <Text style={styles.headerTitle}>{isModifyMode ? 'Modify appointment' : 'New Appointment'}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -245,8 +425,15 @@ export function NewAppointmentScreen() {
             />
           </View>
 
-          {/* Date */}
-          <View style={styles.inputField}>
+          {/* Date & Time – tappable, opens wheel picker with "Set New Time" */}
+          <TouchableOpacity
+            style={styles.inputField}
+            activeOpacity={0.8}
+            onPress={() => {
+              setPickerDate(new Date(startDate.getTime()));
+              setShowDateTimePicker(true);
+            }}
+          >
             <Svg width={16} height={16} viewBox="0 0 13 14.3333" style={styles.inputIcon}>
               <Path
                 d="M9.16667 0.5V3.16667M3.83333 0.5V3.16667M0.5 5.83333H12.5M1.83333 1.83333H11.1667C11.903 1.83333 12.5 2.43029 12.5 3.16667V12.5C12.5 13.2364 11.903 13.8333 11.1667 13.8333H1.83333C1.09695 13.8333 0.5 13.2364 0.5 12.5V3.16667C0.5 2.43029 1.09695 1.83333 1.83333 1.83333Z"
@@ -260,7 +447,66 @@ export function NewAppointmentScreen() {
               <Text style={[styles.inputText, styles.inputValue]}>{dateStr}</Text>
               <Text style={[styles.inputText, styles.inputValue, styles.timeText]}>{timeStr}</Text>
             </View>
-          </View>
+            <Svg width={10} height={5} viewBox="0 0 10 5">
+              <Path
+                d="M1.53244 0.222096L5.00447 3.16819L8.47651 0.222096C8.8255 -0.0740319 9.38926 -0.0740319 9.73826 0.222096C10.0872 0.518223 10.0872 0.996583 9.73826 1.29271L5.63087 4.7779C5.28188 5.07403 4.71812 5.07403 4.36913 4.7779L0.261745 1.29271C-0.0872483 0.996583 -0.0872483 0.518223 0.261745 0.222096C0.610738 -0.0664389 1.18345 -0.0740319 1.53244 0.222096V0.222096Z"
+                fill="#A3A3A3"
+              />
+            </Svg>
+          </TouchableOpacity>
+
+          {showDateTimePicker && (
+            <Modal visible transparent animationType="slide">
+              <Pressable style={styles.dateTimePickerOverlay} onPress={() => setShowDateTimePicker(false)}>
+                <Pressable style={styles.dateTimePickerCard} onPress={(e) => e.stopPropagation()}>
+                  <View style={styles.dateTimePickerHeader}>
+                    <TouchableOpacity onPress={() => setShowDateTimePicker(false)}>
+                      <Text style={styles.dateTimePickerCancel}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.dateTimePickerTitle}>Date & time</Text>
+                    <View style={{ width: 60 }} />
+                  </View>
+                  <DateTimePicker
+                    value={pickerDate}
+                    mode={Platform.OS === 'ios' ? 'datetime' : 'date'}
+                    display="spinner"
+                    onChange={(_ev, d) => {
+                      if (!d) return;
+                      if (Platform.OS === 'android') {
+                        setPickerDate((prev) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), prev.getHours(), prev.getMinutes()));
+                      } else {
+                        setPickerDate(d);
+                      }
+                    }}
+                    themeVariant="dark"
+                    style={Platform.OS === 'android' ? { backgroundColor: '#1a1a1a' } : undefined}
+                  />
+                  {Platform.OS === 'android' && (
+                    <DateTimePicker
+                      value={pickerDate}
+                      mode="time"
+                      display="default"
+                      onChange={(_ev, d) => {
+                        if (!d) return;
+                        setPickerDate((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate(), d.getHours(), d.getMinutes()));
+                      }}
+                      themeVariant="dark"
+                    />
+                  )}
+                  <TouchableOpacity
+                    style={styles.setNewTimeButton}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setStartDate(new Date(pickerDate.getTime()));
+                      setShowDateTimePicker(false);
+                    }}
+                  >
+                    <Text style={styles.setNewTimeButtonText}>Set New Time</Text>
+                  </TouchableOpacity>
+                </Pressable>
+              </Pressable>
+            </Modal>
+          )}
 
           {/* Price */}
           <View style={styles.inputField}>
@@ -321,28 +567,77 @@ export function NewAppointmentScreen() {
             </Svg>
           </View>
 
-          {/* Repeat */}
-          <View style={styles.inputField}>
-            <Svg width={16} height={16} viewBox="0 0 13.5 16.1667" style={styles.inputIcon}>
-              <Path
-                d="M10.0833 0.75L12.75 3.41667M12.75 3.41667L10.0833 6.08333M12.75 3.41667H3.41667C2.70942 3.41667 2.03115 3.69762 1.53105 4.19772C1.03095 4.69781 0.75 5.37609 0.75 6.08333V7.41667M3.41667 15.4167L0.75 12.75M0.75 12.75L3.41667 10.0833M0.75 12.75H10.0833C10.7906 12.75 11.4689 12.469 11.969 11.969C12.469 11.4689 12.75 10.7906 12.75 10.0833V8.75"
-                stroke="#A3A3A3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-                fill="none"
-              />
-            </Svg>
-            <Text style={styles.inputText}>Repeat</Text>
-            <Switch
-              value={repeatEnabled}
-              onValueChange={setRepeatEnabled}
-              trackColor={{ false: '#A3A3A3', true: '#A3A3A3' }}
-              thumbColor="#FCFCFC"
-              ios_backgroundColor="#A3A3A3"
-              style={styles.switch}
-            />
+          {/* Book only one vs multiple – toggle (pink when active) */}
+          <View style={styles.bookSingleRow}>
+            <Text style={styles.bookSingleLabel}>Book only one appointment?</Text>
+            <View style={styles.bookSingleToggle}>
+              <TouchableOpacity
+                style={[styles.bookSingleOption, bookSingleOnly && styles.bookSingleOptionActive]}
+                onPress={() => setBookSingleOnly(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.bookSingleOptionText, bookSingleOnly && styles.bookSingleOptionTextActive]}>YES</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.bookSingleOption, !bookSingleOnly && styles.bookSingleOptionActive]}
+                onPress={() => setBookSingleOnly(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.bookSingleOptionText, !bookSingleOnly && styles.bookSingleOptionTextActive]}>NO</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {!bookSingleOnly && (
+            <>
+              {/* Repeat – opens Repeat screen (end time + interval) */}
+              <TouchableOpacity
+                style={styles.inputField}
+                activeOpacity={0.8}
+                onPress={() =>
+                  router.push({
+                    pathname: '/repeat',
+                    params: {
+                      date: startDate.toISOString(),
+                      hour: String(startDate.getHours()),
+                      repeatEnabled: repeatEnabled ? '1' : '0',
+                      endTime: repeatEndDate?.toISOString() ?? '',
+                      intervalUnit: repeatIntervalUnit,
+                      intervalValue: String(repeatIntervalValue),
+                      clientName: customer?.name ?? '',
+                      serviceName: selectedService?.name ?? '',
+                      clientId: customer?.id ?? '',
+                      serviceId: selectedService?.id ?? '',
+                      duration: duration,
+                    },
+                  })
+                }
+              >
+                <Svg width={16} height={16} viewBox="0 0 13.5 16.1667" style={styles.inputIcon}>
+                  <Path
+                    d="M10.0833 0.75L12.75 3.41667M12.75 3.41667L10.0833 6.08333M12.75 3.41667H3.41667C2.70942 3.41667 2.03115 3.69762 1.53105 4.19772C1.03095 4.69781 0.75 5.37609 0.75 6.08333V7.41667M3.41667 15.4167L0.75 12.75M0.75 12.75L3.41667 10.0833M0.75 12.75H10.0833C10.7906 12.75 11.4689 12.469 11.969 11.969C12.469 11.4689 12.75 10.7906 12.75 10.0833V8.75"
+                    stroke="#A3A3A3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    fill="none"
+                  />
+                </Svg>
+                <Text style={styles.inputText}>Repeat</Text>
+                <Text style={styles.inputValue}>
+                  {repeatEnabled && repeatEndDate
+                    ? `Every ${repeatIntervalValue} ${repeatIntervalUnit}${repeatIntervalValue !== 1 ? 's' : ''}, ends ${format(repeatEndDate, 'MMM d, yyyy')}`
+                    : 'Off'}
+                </Text>
+                <Svg width={10} height={5} viewBox="0 0 10 5">
+                  <Path
+                    d="M1.53244 0.222096L5.00447 3.16819L8.47651 0.222096C8.8255 -0.0740319 9.38926 -0.0740319 9.73826 0.222096C10.0872 0.518223 10.0872 0.996583 9.73826 1.29271L5.63087 4.7779C5.28188 5.07403 4.71812 5.07403 4.36913 4.7779L0.261745 1.29271C-0.0872483 0.996583 -0.0872483 0.518223 0.261745 0.222096C0.610738 -0.0664389 1.18345 -0.0740319 1.53244 0.222096V0.222096Z"
+                    fill="#A3A3A3"
+                  />
+                </Svg>
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* Deposit Due */}
           <View style={styles.inputField}>
@@ -398,7 +693,7 @@ export function NewAppointmentScreen() {
               colors={['#25AFFF', '#25AFFF']}
               style={styles.bookButton}
             >
-              <Text style={styles.bookButtonText}>BOOK</Text>
+              <Text style={styles.bookButtonText}>{isModifyMode ? 'SAVE CHANGES' : 'BOOK'}</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -558,5 +853,87 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  bookSingleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: vs(40),
+    marginBottom: hp(0.8),
+  },
+  bookSingleLabel: {
+    fontFamily: 'Lato',
+    fontSize: ms(13),
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  bookSingleToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a1a',
+    borderRadius: ms(8),
+    padding: ms(2),
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  bookSingleOption: {
+    paddingVertical: hp(0.6),
+    paddingHorizontal: wp(4),
+    borderRadius: ms(6),
+  },
+  bookSingleOptionActive: {
+    backgroundColor: '#FF18EC',
+  },
+  bookSingleOptionText: {
+    fontFamily: 'Lato',
+    fontSize: ms(12),
+    color: '#A3A3A3',
+  },
+  bookSingleOptionTextActive: {
+    fontFamily: 'Lato-Bold',
+    color: '#FFFFFF',
+  },
+  dateTimePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  dateTimePickerCard: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: ms(16),
+    borderTopRightRadius: ms(16),
+    paddingBottom: hp(4),
+  },
+  dateTimePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: wp(5),
+    paddingVertical: hp(1.5),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  dateTimePickerCancel: {
+    fontSize: ms(14),
+    fontWeight: '600',
+    color: '#FF18EC',
+  },
+  dateTimePickerTitle: {
+    fontSize: ms(16),
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  setNewTimeButton: {
+    marginHorizontal: wp(5),
+    marginTop: hp(2),
+    height: vs(48),
+    borderRadius: ms(8),
+    backgroundColor: '#FF18EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setNewTimeButtonText: {
+    fontSize: ms(16),
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

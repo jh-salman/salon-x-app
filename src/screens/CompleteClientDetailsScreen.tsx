@@ -8,11 +8,10 @@ import {
   Image,
 } from "react-native";
 import { router } from "expo-router";
-import { format } from "date-fns";
+import { format, addWeeks } from "date-fns";
 import { RightDecoration } from "../components/RightDecoration";
 import { CalendarBackArrow } from "../components/CalendarHeaderDynamic";
 import { SafeAreaView } from "react-native-safe-area-context";
-// @ts-expect-error - @expo/vector-icons resolved via expo
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import type { ClientDetails } from "../data/clients";
 import { wp, hp, ms, vs } from "../utils/responsive";
@@ -156,11 +155,29 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
 
           {/* Bottom CTAs */}
           <View style={styles.ctaRow}>
-            <TouchableOpacity style={styles.cta}>
+            <TouchableOpacity
+              style={styles.cta}
+              activeOpacity={0.8}
+              onPress={() => {
+                const suggestedDate = addWeeks(date, 5);
+                const serviceName = services[0]?.name ?? '';
+                router.push({
+                  pathname: '/new-appointment',
+                  params: {
+                    rebook: '1',
+                    clientName: clientName,
+                    serviceName,
+                    date: date.toISOString(),
+                    suggestedDate: suggestedDate.toISOString(),
+                    duration: String(duration),
+                  },
+                });
+              }}
+            >
               <Text style={styles.ctaIcon}>⟳</Text>
               <Text style={styles.ctaText}>Rebook</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cta}>
+            <TouchableOpacity style={styles.cta} activeOpacity={0.8}>
               <Text style={styles.ctaIcon}>⚑</Text>
               <Text style={styles.ctaText}>Check out</Text>
             </TouchableOpacity>

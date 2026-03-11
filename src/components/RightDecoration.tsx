@@ -11,15 +11,12 @@ const svgPaths = {
   backgroundShape: 'M75.1195 178.657C66.654 67.6131 0 112.848 0 0L47.8463 4.16055C59.9245 5.21082 69.3227 15.1041 69.7521 27.2202L75.1195 178.657C75.6935 186.187 76 194.435 76 203.5L75.1195 178.657Z',
 };
 
-const RightDateDisplay = () => {
-  const currentDate = new Date();
-  return (
-    <View style={styles.rightDateContainer} pointerEvents="none">
-      <Text style={styles.rightDateDay}>{format(currentDate, 'EEE')}</Text>
-      <Text style={styles.rightDateNumber}>{format(currentDate, 'd')}</Text>
-    </View>
-  );
-};
+const RightDateDisplay = ({ date }: { date: Date }) => (
+  <View style={styles.rightDateContainer} pointerEvents="none">
+    <Text style={styles.rightDateDay}>{format(date, 'EEE')}</Text>
+    <Text style={styles.rightDateNumber}>{format(date, 'd')}</Text>
+  </View>
+);
 
 const BackgroundShape = () => (
   <View style={styles.backgroundShapeWrapper} pointerEvents="none">
@@ -36,7 +33,7 @@ export interface RightDecorationProps {
   lineColors?: [string, string] | [string, string, string];
 }
 
-export const RightDecoration = ({ lineColors }: RightDecorationProps) => {
+export const RightDecoration = ({ date = new Date(), lineColors }: RightDecorationProps) => {
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.rightDecorationContainer} pointerEvents="box-none">
@@ -44,7 +41,7 @@ export const RightDecoration = ({ lineColors }: RightDecorationProps) => {
       <View style={[styles.halfCurvedLineAboveSafeArea, { top: -insets.top }]} pointerEvents="none">
         <HalfCurvedLine id="rightDecorationLine" colors={lineColors} />
       </View>
-      <RightDateDisplay />
+      <RightDateDisplay date={date} />
     </View>
   );
 };

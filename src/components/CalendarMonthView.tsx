@@ -125,8 +125,8 @@ export default function CalendarMonthView({ selectedDate, events, onDateSelect, 
       <Animated.View style={[styles.selectedDaySection, { maxHeight: panelHeight }]}>
         {hasSelectedEvents ? (
           <ScrollView style={styles.eventsList} showsVerticalScrollIndicator={false}>
-            {selectedDayEvents.map((e) => (
-              <View key={e.id} style={[styles.eventRow, { borderLeftColor: hexToDotColor(e.color) }]}>
+            {selectedDayEvents.map((e, idx) => (
+              <View key={`${e.id}-${idx}`} style={[styles.eventRow, { borderLeftColor: hexToDotColor(e.color) }]}>
                 <Text style={styles.eventTitle} numberOfLines={1}>{e.title}</Text>
                 {!e.allDay && <Text style={styles.eventTime}>{format(e.start, 'h:mm a')} - {format(e.end, 'h:mm a')}</Text>}
               </View>

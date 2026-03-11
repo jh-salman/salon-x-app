@@ -10,6 +10,12 @@ export interface CalendarEvent {
   title: string;
   clientName?: string;
   service?: string;
+  /** Same customer across repeat appointments */
+  customerId?: string;
+  /** Same service across repeat appointments */
+  serviceId?: string;
+  /** When set, moving one appointment in the series moves all with same seriesId by the same offset */
+  seriesId?: string;
   start: Date;
   end: Date;
   color?: string;
@@ -21,6 +27,10 @@ export interface CalendarEvent {
   processingTimeStart?: number;
   /** Minutes into service when processing ends (from service) */
   processingTimeEnd?: number;
+  /** Optional notes (shown in modify form) */
+  notes?: string;
+  /** Optional price (shown in modify form) */
+  price?: number | string;
 }
 
 // ---- Services ----

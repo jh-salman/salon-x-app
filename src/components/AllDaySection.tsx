@@ -9,6 +9,8 @@ import { format } from 'date-fns';
 import { colors } from '../theme';
 import { haptics } from '../utils/haptics';
 
+const LONG_PRESS_MS = 400;
+
 const ORB_SIZE = 24;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PLACEMENT_LINE_MARGIN = 24;
@@ -33,6 +35,9 @@ interface AllDayEvent {
   waitlistAddedAt?: number | Date;
   /** What appointment/service they're waiting for (e.g. Color, Cut, Perm, Highlights) */
   service?: string;
+  /** Original start/end so unpark preserves service duration when dropping on another day */
+  start?: Date;
+  end?: Date;
 }
 
 export interface ParkZoneBounds {
@@ -78,8 +83,8 @@ function PillContent({ ev, isPark }: { ev: AllDayEvent; isPark: boolean }) {
   const pillWidth = Math.max(88, Math.min(170, ev.title.length * 8 + (showTimestamp ? 52 : 24) + (showService ? (ev.service?.length ?? 0) * 4 : 0)));
   const PILL_H = showService ? 28 : 22;
   const PILL_R = 8;
-  const fillColor = isPark ? colors.parked.background : '#9DE684';
-  const strokeColor = isPark ? colors.parked.border : '#9DE684';
+  const fillColor = isPark ? colors.parked.background : '#25AFFF';
+  const strokeColor = isPark ? colors.parked.border : '#25AFFF';
   return (
     <View style={[styles.pillWrap, { minWidth: ms(pillWidth), height: vs(PILL_H) }]}>
       <Svg width={ms(pillWidth)} height={vs(PILL_H)} viewBox={`0 0 ${pillWidth} ${PILL_H}`} fill="none" style={styles.pillSvg}>
@@ -99,7 +104,7 @@ function PillContent({ ev, isPark }: { ev: AllDayEvent; isPark: boolean }) {
         {isPark ? (
           <View style={[styles.verticalBar, { backgroundColor: colors.parked.border }]} />
         ) : (
-          <View style={[styles.circleDot, { backgroundColor: '#9DE684' }]} />
+          <View style={[styles.circleDot, { backgroundColor: '#25AFFF' }]} />
         )}
         <View style={styles.pillTextCol}>
           <View style={styles.pillTextRow}>
@@ -144,24 +149,35 @@ function DraggablePill({
   onUnparkDragPosition?: (screenY: number) => void;
   onUnparkDragEnd?: () => void;
 }) {
-  const longPressFiredRef = useRef(false);
+  const dragActiveRef = useRef(false);
+  const activationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewRef = useRef<View>(null);
 
-  const longPress = Gesture.LongPress()
-    .minDuration(400)
+  const clearActivation = () => {
+    if (activationTimeoutRef.current != null) {
+      clearTimeout(activationTimeoutRef.current);
+      activationTimeoutRef.current = null;
+    }
+  };
+
+  const startDrag = () => {
+    dragActiveRef.current = true;
+    haptics.medium();
+    viewRef.current?.measureInWindow((wx, wy, w, h) => {
+      onDragStart?.(ev.title, wx + w / 2, wy + h / 2);
+    });
+  };
+
+  /** Single Pan with activation delay: works on Android (Simultaneous LongPress+Pan is unreliable there) */
+  const panWithLongPress = Gesture.Pan()
+    .minDistance(0)
     .runOnJS(true)
     .onStart(() => {
-      longPressFiredRef.current = true;
-      haptics.medium();
-      viewRef.current?.measureInWindow((wx, wy, w, h) => {
-        onDragStart?.(ev.title, wx + w / 2, wy + h / 2);
-      });
-    });
-
-  const pan = Gesture.Pan()
-    .runOnJS(true)
+      clearActivation();
+      activationTimeoutRef.current = setTimeout(startDrag, LONG_PRESS_MS);
+    })
     .onUpdate((e) => {
-      if (!longPressFiredRef.current) return;
+      if (!dragActiveRef.current) return;
       const x = e.absoluteX;
       const y = e.absoluteY;
       let dropPreview: { dropTime: string; lineY: number } | null = null;
@@ -180,8 +196,9 @@ function DraggablePill({
       onUnparkDragPosition?.(y);
     })
     .onEnd((e) => {
-      if (longPressFiredRef.current) {
-        longPressFiredRef.current = false;
+      clearActivation();
+      if (dragActiveRef.current) {
+        dragActiveRef.current = false;
         onUnparkDragEnd?.();
         onDragEnd?.();
         const dropY = e.absoluteY;
@@ -192,19 +209,22 @@ function DraggablePill({
           const hour = Math.min(DAY_END_HOUR, DAY_START_HOUR + slotIndex);
           const newStart = new Date(selectedDate);
           newStart.setHours(hour, snapMinutesTo5(minutesInSlot), 0, 0);
-          let newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+          const durationMs =
+            ev.start != null && ev.end != null ? ev.end.getTime() - ev.start.getTime() : 60 * 60 * 1000;
+          let newEnd = new Date(newStart.getTime() + durationMs);
           const endOfLastSlot = new Date(selectedDate);
           endOfLastSlot.setHours(DAY_END_HOUR, 59, 59, 999);
           if (newEnd.getTime() > endOfLastSlot.getTime()) newEnd = endOfLastSlot;
           onUnparkToSlot(ev.id, newStart, newEnd);
         }
       }
+    })
+    .onFinalize(() => {
+      clearActivation();
     });
 
-  const composed = Gesture.Simultaneous(longPress, pan);
-
   return (
-    <GestureDetector gesture={composed}>
+    <GestureDetector gesture={panWithLongPress}>
       <View ref={viewRef}>
         <PillContent ev={ev} isPark={isPark} />
       </View>
@@ -223,8 +243,8 @@ function NumberedButton({
   isPark: boolean;
   onPress: () => void;
 }) {
-  const fillColor = isPark ? colors.parked.background : '#9DE684';
-  const strokeColor = isPark ? colors.parked.border : '#9DE684';
+  const fillColor = isPark ? colors.parked.background : '#25AFFF';
+  const strokeColor = isPark ? colors.parked.border : '#25AFFF';
   const w = 80;
   const h = 22;
   const r = 8;
@@ -238,7 +258,7 @@ function NumberedButton({
           {isPark ? (
             <View style={[styles.verticalBar, { backgroundColor: colors.parked.border }]} />
           ) : (
-            <View style={[styles.circleDot, { backgroundColor: '#9DE684' }]} />
+            <View style={[styles.circleDot, { backgroundColor: '#25AFFF' }]} />
           )}
           <Text style={styles.pillText}>
             {label} ({count})
@@ -282,25 +302,36 @@ function DraggableExpandedItem({
   onUnparkDragPosition?: (screenY: number) => void;
   onUnparkDragEnd?: () => void;
 }) {
-  const longPressFiredRef = useRef(false);
+  const dragActiveRef = useRef(false);
+  const activationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewRef = useRef<View>(null);
 
-  const longPress = Gesture.LongPress()
-    .minDuration(400)
+  const clearActivation = () => {
+    if (activationTimeoutRef.current != null) {
+      clearTimeout(activationTimeoutRef.current);
+      activationTimeoutRef.current = null;
+    }
+  };
+
+  const startDrag = () => {
+    dragActiveRef.current = true;
+    haptics.medium();
+    onDragStartFromExpanded?.();
+    viewRef.current?.measureInWindow((wx, wy, w, h) => {
+      onDragStart?.(ev.title, wx + w / 2, wy + h / 2);
+    });
+  };
+
+  /** Single Pan with activation delay: Android-safe (Simultaneous LongPress+Pan unreliable on Android) */
+  const panWithLongPress = Gesture.Pan()
+    .minDistance(0)
     .runOnJS(true)
     .onStart(() => {
-      longPressFiredRef.current = true;
-      haptics.medium();
-      onDragStartFromExpanded?.();
-      viewRef.current?.measureInWindow((wx, wy, w, h) => {
-        onDragStart?.(ev.title, wx + w / 2, wy + h / 2);
-      });
-    });
-
-  const pan = Gesture.Pan()
-    .runOnJS(true)
+      clearActivation();
+      activationTimeoutRef.current = setTimeout(startDrag, LONG_PRESS_MS);
+    })
     .onUpdate((e) => {
-      if (!longPressFiredRef.current) return;
+      if (!dragActiveRef.current) return;
       const x = e.absoluteX;
       const y = e.absoluteY;
       let dropPreview: { dropTime: string; lineY: number } | null = null;
@@ -319,8 +350,9 @@ function DraggableExpandedItem({
       onUnparkDragPosition?.(y);
     })
     .onEnd((e) => {
-      if (longPressFiredRef.current) {
-        longPressFiredRef.current = false;
+      clearActivation();
+      if (dragActiveRef.current) {
+        dragActiveRef.current = false;
         onUnparkDragEnd?.();
         onDragEnd?.();
         const dropY = e.absoluteY;
@@ -332,7 +364,9 @@ function DraggableExpandedItem({
             const hour = Math.min(DAY_END_HOUR, DAY_START_HOUR + slotIndex);
             const newStart = new Date(selectedDate);
             newStart.setHours(hour, snapMinutesTo5(minutesInSlot), 0, 0);
-            let newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+            const durationMs =
+              ev.start != null && ev.end != null ? ev.end.getTime() - ev.start.getTime() : 60 * 60 * 1000;
+            let newEnd = new Date(newStart.getTime() + durationMs);
             const endOfLastSlot = new Date(selectedDate);
             endOfLastSlot.setHours(DAY_END_HOUR, 59, 59, 999);
             if (newEnd.getTime() > endOfLastSlot.getTime()) newEnd = endOfLastSlot;
@@ -342,9 +376,10 @@ function DraggableExpandedItem({
           onDragCancelFromExpanded?.(isPark);
         }
       }
+    })
+    .onFinalize(() => {
+      clearActivation();
     });
-
-  const composed = Gesture.Simultaneous(longPress, pan);
 
   const waitlistTime = !isPark && ev.waitlistAddedAt != null
     ? (typeof ev.waitlistAddedAt === 'number' ? new Date(ev.waitlistAddedAt) : ev.waitlistAddedAt)
@@ -353,7 +388,7 @@ function DraggableExpandedItem({
   if (!onUnparkToSlot) {
     return (
       <View style={styles.expandedItem}>
-        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.parked.border } : { backgroundColor: '#9DE684' }]} />
+        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.parked.border } : { backgroundColor: '#25AFFF' }]} />
         <View style={styles.expandedItemContent}>
           <View style={styles.expandedItemTextRow}>
             <Text style={styles.expandedItemText} numberOfLines={1}>{ev.title}</Text>
@@ -370,9 +405,9 @@ function DraggableExpandedItem({
   }
 
   return (
-    <GestureDetector gesture={composed}>
+    <GestureDetector gesture={panWithLongPress}>
       <View ref={viewRef} style={styles.expandedItem}>
-        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.parked.border } : { backgroundColor: '#9DE684' }]} />
+        <View style={[styles.verticalBar, isPark ? { backgroundColor: colors.parked.border } : { backgroundColor: '#25AFFF' }]} />
         <View style={styles.expandedItemContent}>
           <View style={styles.expandedItemTextRow}>
             <Text style={styles.expandedItemText} numberOfLines={1}>{ev.title}</Text>
@@ -466,10 +501,10 @@ export function AllDaySection({
                 {parked.length >= MULTIPLE_THRESHOLD ? (
                   <NumberedButton label="Parked" count={parked.length} isPark onPress={() => setExpandedParked(true)} />
                 ) : (
-                  parked.map((ev) =>
+                  parked.map((ev, idx) =>
                     onUnparkToSlot ? (
                       <DraggablePill
-                        key={ev.id}
+                        key={`${ev.id}-${idx}`}
                         ev={ev}
                         isPark
                         calendarLayout={calendarLayout}
@@ -483,7 +518,7 @@ export function AllDaySection({
                         onUnparkDragEnd={onUnparkDragEnd}
                       />
                     ) : (
-                      <PillContent key={ev.id} ev={ev} isPark />
+                      <PillContent key={`${ev.id}-${idx}`} ev={ev} isPark />
                     )
                   )
                 )}
@@ -494,10 +529,10 @@ export function AllDaySection({
                 {waitingSorted.length >= MULTIPLE_THRESHOLD ? (
                   <NumberedButton label="Waiting" count={waitingSorted.length} isPark={false} onPress={() => setExpandedWaiting(true)} />
                 ) : (
-                  waitingSorted.map((ev) =>
+                  waitingSorted.map((ev, idx) =>
                     onUnparkToSlot ? (
                       <DraggablePill
-                        key={ev.id}
+                        key={`${ev.id}-${idx}`}
                         ev={ev}
                         isPark={false}
                         calendarLayout={calendarLayout}
@@ -511,7 +546,7 @@ export function AllDaySection({
                         onUnparkDragEnd={onUnparkDragEnd}
                       />
                     ) : (
-                      <PillContent key={ev.id} ev={ev} isPark={false} />
+                      <PillContent key={`${ev.id}-${idx}`} ev={ev} isPark={false} />
                     )
                   )
                 )}
@@ -556,9 +591,9 @@ export function AllDaySection({
               <Text style={styles.expandedHint}>Switch to Day view to move or place appointments</Text>
             )}
             <ScrollView style={styles.expandedScroll} keyboardShouldPersistTaps="handled">
-              {(expandedParked ? parked : waitingSorted).map((ev) => (
+              {(expandedParked ? parked : waitingSorted).map((ev, idx) => (
                 <DraggableExpandedItem
-                  key={ev.id}
+                  key={`${ev.id}-${idx}`}
                   ev={ev}
                   isPark={expandedParked}
                   calendarLayout={calendarLayout}

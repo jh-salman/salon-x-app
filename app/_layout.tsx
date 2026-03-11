@@ -48,6 +48,7 @@ export default function RootLayout() {
           <Stack.Screen name="client/[id]" />
           <Stack.Screen name="new-customer" />
           <Stack.Screen name="new-service" />
+          <Stack.Screen name="repeat" />
           <Stack.Screen name="duration" />
           <Stack.Screen name="personal-info" />
           <Stack.Screen name="contact-info" />
