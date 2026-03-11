@@ -8,7 +8,7 @@ import Svg, { Path, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 const RIGHT_BACKGROUND_PATH =
   'M75.1195 178.657C66.654 67.6131 0 112.848 0 0L47.8463 4.16055C59.9245 5.21082 69.3227 15.1041 69.7521 27.2202L75.1195 178.657C75.6935 186.187 76 194.435 76 203.5L75.1195 178.657Z';
 
-const defaultLineColors = ['#FF18EC', '#5333F1', '#00E7F9'] as const;
+const defaultLineColors: [string, string, string] = ['#FF18EC', '#5333F1', '#00E7F9'];
 
 export interface LeftDecorationProps {
   /** Optional gradient colors for the curved line [start, mid?, end]. Default: pink → purple → cyan */

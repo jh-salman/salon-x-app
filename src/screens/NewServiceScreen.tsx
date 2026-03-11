@@ -139,7 +139,7 @@ export function NewServiceScreen() {
   const [serviceName, setServiceName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<{ id: string; name: string } | null>(null);
-  const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
+  const [calendarColor, setCalendarColor] = useState<string>(CALENDAR_COLORS[0]);
   const [showOnWebsite, setShowOnWebsite] = useState(true);
 
   // Duration (wheel picker model)
@@ -489,8 +489,8 @@ export function NewServiceScreen() {
         visible={colorModal}
         title="Calendar Color"
         options={CALENDAR_COLORS.map((c, i) => ({ id: String(i), name: c }))}
-        selected={{ id: String(CALENDAR_COLORS.indexOf(calendarColor)), name: calendarColor }}
-        onSelect={(opt) => setCalendarColor(opt.name)}
+        selected={{ id: String((CALENDAR_COLORS as readonly string[]).indexOf(calendarColor)), name: calendarColor }}
+        onSelect={(opt) => setCalendarColor(opt.name as (typeof CALENDAR_COLORS)[number])}
         onClose={() => setColorModal(false)}
         renderOption={(opt) => (
           <View style={styles.colorOptionRow}>

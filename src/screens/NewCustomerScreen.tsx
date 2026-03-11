@@ -513,4 +513,27 @@ const styles = StyleSheet.create({
     fontSize: RFValue(14),
     color: '#000',
   },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: wp(8),
+  },
+  loadingBox: {
+    minWidth: wp(40),
+    backgroundColor: '#1a1a1a',
+    borderRadius: ms(12),
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: vs(18),
+    paddingHorizontal: wp(6),
+    alignItems: 'center',
+    gap: vs(10),
+  },
+  loadingText: {
+    fontFamily: 'Lato_700Bold',
+    fontSize: RFValue(13),
+    color: '#FFFFFF',
+  },
 });

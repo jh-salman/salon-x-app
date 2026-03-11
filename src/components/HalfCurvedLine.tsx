@@ -5,7 +5,7 @@ import Svg, { Path, G, Defs, LinearGradient, Stop, Filter, FeFlood, FeColorMatri
 
 const CURVED_LINE_PATH = 'M33.5 24C33.5 144.5 111.5 82.2516 111.5 225';
 
-const defaultColors = ['#FF18EC', '#5333F1', '#00E7F9'] as const;
+const defaultColors: [string, string, string] = ['#FF18EC', '#5333F1', '#00E7F9'];
 
 export interface HalfCurvedLineProps {
   /** Gradient stop colors (2 or 3). Default: pink → purple → cyan */

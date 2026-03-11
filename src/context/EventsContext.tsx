@@ -6,17 +6,28 @@ import { LoadingScreen } from '../components/LoadingScreen';
 
 const STORAGE_KEY = '@calendar_events';
 
-function parseEvent(e: CalendarEvent & { start?: string; end?: string; waitlistAddedAt?: number | string }): CalendarEvent {
+type PersistedCalendarEvent = Omit<CalendarEvent, 'start' | 'end' | 'waitlistAddedAt'> & {
+  start: Date | string;
+  end: Date | string;
+  waitlistAddedAt?: number | string | Date;
+};
+
+function toDate(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+function parseEvent(e: PersistedCalendarEvent): CalendarEvent {
   const waitlistAddedAt =
     e.waitlistAddedAt == null
       ? undefined
       : typeof e.waitlistAddedAt === 'number'
         ? e.waitlistAddedAt
-        : new Date(e.waitlistAddedAt as string).getTime();
+        : new Date(e.waitlistAddedAt).getTime();
+
   return {
     ...e,
-    start: e.start instanceof Date ? e.start : new Date(e.start as unknown as string),
-    end: e.end instanceof Date ? e.end : new Date(e.end as unknown as string),
+    start: toDate(e.start),
+    end: toDate(e.end),
     waitlistAddedAt,
   };
 }
