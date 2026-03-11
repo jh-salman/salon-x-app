@@ -1,0 +1,98 @@
+---
+description: Core engineering rules for SalonX calendar-expo app
+globs: "**/*.{ts,tsx,js,jsx}"
+alwaysApply: true
+---
+
+# SalonX Engineering Rules
+
+These rules apply to all new code and refactors in this project.
+
+## 1) Keep TypeScript green
+
+- `npx tsc --noEmit` must pass after meaningful changes.
+- Do not leave temporary type errors behind.
+- Do not commit broken backup files inside the TypeScript compile path.
+- Prefer explicit types for shared state, route params, and context values.
+
+## 2) No backup or dead files in src/
+
+- Do not keep files like `*.backup.ts`, `*.old.ts`, `*.copy.ts` inside `src/`.
+- If you need to keep experiments, move them into `docs/`, `notes/`, or an `archive/` folder outside app compile paths.
+- Remove unused components, styles, and imports during cleanup.
+
+## 3) Theme-first styling
+
+- Reuse colors from `src/theme/colors.ts` instead of scattering hardcoded hex values.
+- Reuse shared spacing and responsive helpers where practical.
+- If a new repeated visual token appears 2+ times, promote it to the theme.
+- Keep pink/blue/orange/green behavior consistent with existing calendar semantics.
+
+## 4) Split logic before files become too large
+
+- If a screen mixes UI + state + business rules + animations, extract hooks or helper modules.
+- Prefer separating:
+  - screen orchestration
+  - domain logic
+  - drag/resize helpers
+  - formatting helpers
+  - presentational components
+- Avoid turning screens into god components.
+
+## 5) Context is for shared app state, not everything
+
+- Use context only for state that must be shared across screens.
+- Keep transient UI state local to the screen/component.
+- If context logic grows complicated, extract pure helpers for transforms and persistence.
+
+## 6) Calendar behavior must stay consistent
+
+- Day, week, and month modes must have clear responsibility boundaries.
+- Do not silently enable drag/drop in week or month views unless explicitly intended.
+- Shared constants like `SLOT_HEIGHT` and `DAY_START_HOUR` must stay aligned across drag/drop code.
+- If behavior differs by mode, make the difference explicit in props or helper functions.
+
+## 7) AsyncStorage and mock data rules
+
+- Keep one clear source of truth for persisted state.
+- Seed mock data intentionally; do not merge mock data in surprising ways without comments.
+- Date serialization/deserialization must be explicit and safe.
+- Persistence code should be easy to trace and debug.
+
+## 8) Route and screen rules
+
+- Expo Router route files should stay thin and delegate to screen components.
+- Route params must be validated or handled defensively.
+- Navigation side effects should be isolated and readable.
+
+## 9) Accessibility and touch safety
+
+- Interactive elements should have reasonable touch targets.
+- Important buttons, pills, and gestures should have accessible labels when practical.
+- Avoid gesture-only critical actions without a clear fallback or confirmation.
+
+## 10) Product rules for changes
+
+When adding a feature:
+- update or create a short doc in `docs/` if the behavior is non-trivial
+- keep status labels accurate: done / pending / future
+- avoid half-implemented UI that looks complete unless clearly marked
+
+## 11) Before committing
+
+Before large commits, check:
+- project still builds/types cleanly
+- no debug colors or temporary logs left behind
+- no unused imports or dead experimental files
+- docs reflect meaningful feature behavior changes
+
+## 12) Code review mindset
+
+Default preference order:
+1. correctness
+2. consistency
+3. readability
+4. reuse
+5. cleverness
+
+Choose boring, clear code over smart but fragile code.
