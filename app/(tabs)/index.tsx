@@ -1,5 +1,5 @@
-import { CalendarScreen } from '../../src/screens/CalendarScreen';
+import { StylistScreen } from '../../src/screens/StylistScreen';
 
 export default function StylistTab() {
-  return <CalendarScreen />;
+  return <StylistScreen />;
 }

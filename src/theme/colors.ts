@@ -45,5 +45,13 @@ export const colors = {
     secondary: '#FFFFFF',
     muted: '#FFFFFF',
     weekMuted: '#FFFFFF',
+    /** Muted gray for secondary labels (e.g. service name, time on stylist screen) */
+    mutedSecondary: '#afafaf',
+  },
+  /** Stylist overlay: card background, nav bar, header */
+  surface: {
+    card: 'rgba(26, 26, 26, 0.95)',
+    nav: '#161923',
+    header: '#726D6D',
   },
 };

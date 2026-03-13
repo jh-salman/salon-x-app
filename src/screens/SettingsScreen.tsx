@@ -14,6 +14,7 @@ import Svg, { Path } from 'react-native-svg';
 import { colors, highlightColors } from '../theme';
 import { wp, hp, ms } from '../utils/responsive';
 import { ChevronIcon, PersonIcon, CalendarIcon, SettingsIcon } from '../components/icons';
+import { useTheme } from '../context/ThemeContext';
 
 const LockIcon = ({ size = 22, color = highlightColors.neonOrange }: { size?: number; color?: string }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -55,15 +56,20 @@ function SettingRow({ icon, label, onPress, isLast }: SettingRowProps) {
   );
 }
 
+const PaletteIcon = ({ size = 22, color }: { size?: number; color: string }) => (
+  <View style={[styles.paletteIcon, { backgroundColor: color }]} />
+);
+
 export function SettingsScreen() {
   const router = useRouter();
+  const { primaryColor } = useTheme();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <ChevronIcon size={20} color={highlightColors.neonPink} />
-          <Text style={styles.backText}>Back</Text>
+          <ChevronIcon size={20} color={primaryColor} />
+          <Text style={[styles.backText, { color: primaryColor }]}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
         <View style={styles.headerSpacer} />
@@ -87,12 +93,12 @@ export function SettingsScreen() {
             onPress={() => router.push('/personal-info')}
           />
           <SettingRow
-            icon={<CalendarIcon size={22} color={highlightColors.neonPink} />}
+            icon={<CalendarIcon size={22} color={primaryColor} />}
             label="My Work Schedule"
             onPress={() => router.push('/work-schedule')}
           />
           <SettingRow
-            icon={<CalendarIcon size={22} color={highlightColors.neonPink} />}
+            icon={<CalendarIcon size={22} color={primaryColor} />}
             label="My Assigned Services"
             onPress={() => router.push('/assigned-services')}
           />
@@ -109,10 +115,20 @@ export function SettingsScreen() {
           />
         </View>
 
+        <Text style={styles.sectionTitle}>APPEARANCE</Text>
+        <View style={styles.section}>
+          <SettingRow
+            icon={<PaletteIcon color={primaryColor} />}
+            label="Theme"
+            onPress={() => router.push('/theme')}
+            isLast
+          />
+        </View>
+
         <Text style={styles.sectionTitle}>MY TEAM</Text>
         <View style={styles.section}>
           <SettingRow
-            icon={<SettingsIcon size={22} color={highlightColors.neonPink} />}
+            icon={<SettingsIcon size={22} color={primaryColor} />}
             label="Manage Team"
             onPress={() => {}}
             isLast
@@ -122,12 +138,12 @@ export function SettingsScreen() {
         <Text style={styles.sectionTitle}>MY BUSINESS</Text>
         <View style={styles.section}>
           <SettingRow
-            icon={<SettingsIcon size={22} color={highlightColors.neonPink} />}
+            icon={<SettingsIcon size={22} color={primaryColor} />}
             label="Business Details"
             onPress={() => {}}
           />
           <SettingRow
-            icon={<SettingsIcon size={22} color={highlightColors.neonPink} />}
+            icon={<SettingsIcon size={22} color={primaryColor} />}
             label="Website"
             onPress={() => {}}
             isLast
@@ -188,6 +204,7 @@ const styles = StyleSheet.create({
   rowPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
   rowLast: { borderBottomWidth: 0 },
   rowIcon: { width: 28, alignItems: 'center', marginRight: wp(3) },
+  paletteIcon: { width: 22, height: 22, borderRadius: 11 },
   rowLabel: { flex: 1, fontSize: ms(15), color: '#FFFFFF', fontWeight: '500' },
   chevronRight: { transform: [{ rotate: '180deg' }] },
 });

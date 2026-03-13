@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   rightDateContainer: {
     position: 'absolute',
     top: vs(0),
-    right: ms(15),
+    right: ms(12),
     alignItems: 'flex-end',
     width: ms(43),
     // backgroundColor: 'red',

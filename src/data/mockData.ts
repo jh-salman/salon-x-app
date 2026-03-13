@@ -5,7 +5,12 @@
  */
 
 import dayjs from 'dayjs';
-import type { CalendarEvent, ClientDetails, ClientSummary, ServiceOption } from './types';
+import type {
+  CalendarEvent,
+  ClientDetails,
+  ClientSummary,
+  ServiceOption,
+} from './types';
 
 // ---- Calendar events ----
 
@@ -338,3 +343,4 @@ export const MOCK_CLIENT_DETAILS: Record<string, ClientDetails> = {
     ],
   },
 };
+

@@ -13,6 +13,7 @@ import { DurationResultProvider } from '../src/context/DurationResultContext';
 import { WorkScheduleProvider } from '../src/context/WorkScheduleContext';
 import { AssignedServicesProvider } from '../src/context/AssignedServicesContext';
 import { SecurityProvider } from '../src/context/SecurityContext';
+import { ThemeProvider } from '../src/context/ThemeContext';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -26,6 +27,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <ThemeProvider>
       <WorkScheduleProvider>
       <AssignedServicesProvider>
       <SecurityProvider>
@@ -58,6 +60,7 @@ export default function RootLayout() {
           <Stack.Screen name="assigned-services" />
           <Stack.Screen name="preferences" />
           <Stack.Screen name="security" />
+          <Stack.Screen name="theme" />
         </Stack>
         <StatusBar style="light" />
       </GestureHandlerRootView>
@@ -69,6 +72,7 @@ export default function RootLayout() {
       </SecurityProvider>
       </AssignedServicesProvider>
       </WorkScheduleProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
