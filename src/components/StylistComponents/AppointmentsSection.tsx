@@ -6,6 +6,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { MorphAppointmentCard } from './MorphAppointmentCard';
 import { vs } from '../../utils/responsive';
+import {
+  STYLIST_CARD_LEFT,
+  STYLIST_CARD_WIDTH,
+  STYLIST_CARD_GAP,
+} from './stylistConstants';
 
 export type Appointment = {
   id: string;
@@ -14,23 +19,26 @@ export type Appointment = {
   time: string;
 };
 
-/** Appointment section — own layout (same values as waitlist but independent). */
 const CARD_HEIGHT = vs(50);
-const CARD_GAP = vs(3);
-const CARD_LEFT = 10;
-const CARD_WIDTH = 389;
 
 /** Viewport height: exactly 4 cards visible; 4+ scroll. */
-export const VIEWPORT_HEIGHT_FOR_4_CARDS = 4 * CARD_HEIGHT + 3 * CARD_GAP;
+export const VIEWPORT_HEIGHT_FOR_4_CARDS =
+  4 * CARD_HEIGHT + 3 * STYLIST_CARD_GAP;
+
+/** Viewport height: exactly 5 cards visible; 5+ scroll. */
+export const VIEWPORT_HEIGHT_FOR_5_CARDS =
+  5 * CARD_HEIGHT + 4 * STYLIST_CARD_GAP;
 
 type Props = {
   appointments: Appointment[];
-  /** Screen Y where the appointment viewport starts (below sub-branding). */
   viewportTop: number;
-  /** Height of the visible clipped window (above waitlist header). */
   viewportHeight: number;
 };
 
+/**
+ * Appointments list in a fixed-width column at STYLIST_CARD_LEFT.
+ * Cards use left: 0 inside this column so they align with branding & waitlist title.
+ */
 export function AppointmentsSection({
   appointments,
   viewportTop,
@@ -39,50 +47,50 @@ export function AppointmentsSection({
   const scrollY = useSharedValue(0);
 
   const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
     },
   });
 
   const contentHeight =
-    appointments.length * (CARD_HEIGHT + CARD_GAP) + vs(20);
+    appointments.length * (CARD_HEIGHT + STYLIST_CARD_GAP) + STYLIST_CARD_GAP;
 
   return (
     <View
       pointerEvents="box-none"
       style={[
-        styles.viewportShell,
+        styles.column,
         {
+          left: STYLIST_CARD_LEFT,
           top: viewportTop,
+          width: STYLIST_CARD_WIDTH,
           height: viewportHeight,
         },
       ]}
     >
       <Animated.ScrollView
-        style={styles.viewport}
-        contentContainerStyle={{ minHeight: contentHeight }}
+        style={styles.scroll}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={onScroll}
         bounces={false}
       >
-        <View style={{ height: contentHeight }}>
-          {appointments.map((item, index) => {
-            const y = index * (CARD_HEIGHT + CARD_GAP);
-
-            return (
-              <MorphAppointmentCard
-                key={item.id}
-                item={item}
-                x={CARD_LEFT}
-                y={y}
-                width={CARD_WIDTH}
-                height={CARD_HEIGHT}
-                scrollY={scrollY}
-                railScreenOffsetY={viewportTop}
-              />
-            );
-          })}
+        <View style={[styles.contentWrap, { height: contentHeight }]}>
+          {appointments.map((item, index) => (
+            <MorphAppointmentCard
+              key={item.id}
+              item={item}
+              x={0}
+              y={index * (CARD_HEIGHT + STYLIST_CARD_GAP)}
+              width={STYLIST_CARD_WIDTH}
+              height={CARD_HEIGHT}
+              scrollY={scrollY}
+              railScreenOffsetY={viewportTop}
+              screenLeft={STYLIST_CARD_LEFT}
+              showProgressCircle={index < 3}
+            />
+          ))}
         </View>
       </Animated.ScrollView>
     </View>
@@ -90,14 +98,17 @@ export function AppointmentsSection({
 }
 
 const styles = StyleSheet.create({
-  viewportShell: {
+  column: {
     position: 'absolute',
-    left: 0,
-    right: 0,
     overflow: 'hidden',
   },
-  viewport: {
+  scroll: {
     flex: 1,
-    overflow: 'hidden',
+  },
+  contentContainer: {
+    paddingBottom: STYLIST_CARD_GAP,
+  },
+  contentWrap: {
+    width: '100%',
   },
 });

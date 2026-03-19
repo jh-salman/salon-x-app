@@ -25,11 +25,11 @@ export function getRailXForScreenY(screenY: number) {
     { y: 250, x: 342 },
     { y: 300, x: 330 },
     { y: 360, x: 304 },
-    { y: 430, x: 286 },
-    { y: 500, x: 282 },
-    { y: 570, x: 292 },
-    { y: 640, x: 307 },
-    { y: 720, x: 326 },
+    { y: 430, x: 287 },
+    { y: 500, x: 286 },
+    { y: 570, x: 295 },
+    { y: 640, x: 312 },
+    { y: 720, x: 334 },
   ];
 
   if (screenY <= points[0].y) return points[0].x;
@@ -119,13 +119,13 @@ export function buildCardPath({
   return `
     M ${r} 0
     L ${topRightX - r} 0
-    Q ${topRightX} 0 ${topRightX} ${r}
+    L ${topRightX} 0
     L ${topRightX} ${height * 0.22}
     C ${midRightX} ${height * 0.35}
       ${midRightX} ${height * 0.65}
       ${bottomRightX} ${height * 0.82}
     L ${bottomRightX} ${height - r}
-    Q ${bottomRightX} ${height} ${bottomRightX - r} ${height}
+    L ${bottomRightX} ${height}
     L ${r} ${height}
     Q 0 ${height} 0 ${height - r}
     L 0 ${r}

@@ -1,52 +1,100 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { ms, vs, RFValue } from '../../utils/responsive';
+import { useTheme } from '../../context/ThemeContext';
+import { ms, RFValue, vs } from '../../utils/responsive';
+import {
+  STYLIST_CARD_LEFT,
+  STYLIST_CARD_WIDTH,
+  STYLIST_CONTENT_PADDING_LEFT,
+} from './stylistConstants';
 
-/** Waiting list section title card path (309×24 viewBox). */
-const WAITLIST_TITLE_PATH =
-  'M0 4C0 1.79086 1.79086 0 4 0H298.488C300.697 0 302.546 1.79602 302.947 3.96861C303.346 6.13782 304.094 9.0747 305.493 12.4706C306.366 14.5912 307.223 16.7554 307.951 18.6275C308.962 21.2248 307.036 24 304.25 24H4C1.79086 24 0 22.2091 0 20V4Z';
+/** Height of the "Waiting list" title row (used for layout in StylistScreen). */
+export const WAITLIST_TITLE_HEIGHT = vs(20);
 
-const CARD_WIDTH = ms(292);
-const CARD_HEIGHT = vs(24);
-const CARD_LEFT = ms(12);
+const TITLE_BORDER_RADIUS = vs(4);
+const DOT_SIZE = ms(12);
 
 type Props = {
   /** Screen Y position (fixed). */
   top: number;
+  /** Section title (default: "Waiting list"). */
   title?: string;
+  /** Optional content on the right (e.g. Waiting / Referrals / Messages buttons). */
+  rightContent?: ReactNode;
 };
 
-export function WaitlistTitleCard({ top, title = 'Waiting list' }: Props) {
+/**
+ * Waiting list section title. Left: dot + title; right: optional buttons.
+ * Same horizontal line as appointment cards; buttons sit on the right of the title row.
+ */
+export function WaitlistTitleCard({
+  top,
+  title = 'Waiting list',
+  rightContent,
+}: Props) {
+  const { primaryColor } = useTheme();
+
   return (
     <View
-      style={[styles.wrap, { left: CARD_LEFT, top, width: CARD_WIDTH, height: CARD_HEIGHT }]}
-      pointerEvents="none"
+      style={[
+        styles.wrap,
+        {
+          left: STYLIST_CARD_LEFT,
+          top,
+          width: STYLIST_CARD_WIDTH,
+          height: WAITLIST_TITLE_HEIGHT,
+        },
+      ]}
+      pointerEvents="box-none"
     >
-      <Svg width={CARD_WIDTH} height={CARD_HEIGHT} viewBox="0 0 309 24" style={StyleSheet.absoluteFill}>
-        <Path d={WAITLIST_TITLE_PATH} fill="#1A1A1A" />
-      </Svg>
       <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={1}>
+        <View
+          style={{
+            width: DOT_SIZE,
+            height: DOT_SIZE,
+            borderRadius: DOT_SIZE / 2,
+            backgroundColor: primaryColor,
+          }}
+        />
+        <Text style={[styles.title, { color: primaryColor }]} numberOfLines={1}>
           {title}
         </Text>
+        {rightContent != null ? (
+          <View style={styles.right}>{rightContent}</View>
+        ) : null}
       </View>
     </View>
   );
 }
 
+const TITLE_BG = '#1A1A1A';
+
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: TITLE_BG,
+    paddingLeft: STYLIST_CONTENT_PADDING_LEFT,
+    paddingRight: ms(8),
+    borderTopLeftRadius: TITLE_BORDER_RADIUS,
+    borderBottomLeftRadius: TITLE_BORDER_RADIUS,
   },
   content: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: ms(12),
+    width: '70%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(7),
   },
   title: {
-    color: '#FFFFFF',
     fontSize: RFValue(13),
     fontWeight: '600',
+    flexShrink: 1,
+  },
+  right: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
   },
 });

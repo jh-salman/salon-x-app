@@ -41,6 +41,15 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
     recommendations,
     products,
   } = clientDetails;
+
+  // Defensive defaults: if any field is missing from appointment-derived clientDetails,
+  // prevent runtime crashes (e.g. `clientName.charAt(0)`, `.map`, `.length` on undefined).
+  const safeClientName = typeof clientName === 'string' && clientName.length > 0 ? clientName : 'Client';
+  const safeTechniqueNotes = Array.isArray(techniqueNotes) ? techniqueNotes : [];
+  const safeServices = Array.isArray(services) ? services : [];
+  const safeRecommendations = Array.isArray(recommendations) ? recommendations : [];
+  const safeProducts = Array.isArray(products) ? products : [];
+  const safePersonalNotes = typeof personalNotes === 'string' ? personalNotes : '';
   const dateStr = format(date, "M.d.yyyy");
 
   return (
@@ -78,7 +87,7 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
               <Image source={clientPhoto} style={styles.avatar} resizeMode="cover" />
             ) : (
               <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarInitial}>{clientName.charAt(0)}</Text>
+                <Text style={styles.avatarInitial}>{safeClientName.charAt(0)}</Text>
               </View>
             )}
 
@@ -89,7 +98,7 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
               </View>
 
               <View style={styles.nameBlock}>
-                <Text style={styles.nameText} numberOfLines={1}>{clientName}</Text>
+                <Text style={styles.nameText} numberOfLines={1}>{safeClientName}</Text>
                 <Text style={styles.subText} numberOfLines={1}>{phone ?? "—"}</Text>
               </View>
 
@@ -116,22 +125,22 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
                 <Text style={styles.blockTitle}>{duration} min</Text>
               </View>
               <View style={styles.hr} />
-              {techniqueNotes.length > 0 && techniqueNotes.map((note, i) => (
+              {safeTechniqueNotes.length > 0 && safeTechniqueNotes.map((note, i) => (
                 <Text key={i} style={styles.bodyText}>{note}</Text>
               ))}
             </SectionCard>
 
             {/* Services Card - from clientDetails */}
             <SectionCard title="Services">
-              {services.map((s) => (
+              {safeServices.map((s) => (
                 <WireRow key={s.id} left={s.name} right={`$${s.price.toFixed(2)}`} bullet={s.completed !== false ? "●" : "○"} />
               ))}
-              {recommendations.length > 0 && (
+              {safeRecommendations.length > 0 && (
                 <>
                   <View style={styles.recommendedPill}>
                     <Text style={styles.recommendedText}>Recommended</Text>
                   </View>
-                  {recommendations.map((s) => (
+                  {safeRecommendations.map((s) => (
                     <WireRow key={s.id} left={s.name} right={`$${s.price.toFixed(2)}`} bullet="○" />
                   ))}
                 </>
@@ -139,9 +148,9 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
             </SectionCard>
 
             {/* Home Care Card - from clientDetails */}
-            {products.length > 0 && (
+            {safeProducts.length > 0 && (
               <SectionCard title="Home Care">
-                {products.map((p) => (
+                {safeProducts.map((p) => (
                   <ProductRow key={p.id} name={`${p.brand}: ${p.name}`} price={`$${p.price.toFixed(2)}`} />
                 ))}
               </SectionCard>
@@ -160,12 +169,12 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
               activeOpacity={0.8}
               onPress={() => {
                 const suggestedDate = addWeeks(date, 5);
-                const serviceName = services[0]?.name ?? '';
+                    const serviceName = safeServices[0]?.name ?? '';
                 router.push({
                   pathname: '/new-appointment',
                   params: {
                     rebook: '1',
-                    clientName: clientName,
+                        clientName: safeClientName,
                     serviceName,
                     date: date.toISOString(),
                     suggestedDate: suggestedDate.toISOString(),

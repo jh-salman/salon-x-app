@@ -367,7 +367,11 @@ const ResizeHandle = ({
   );
 };
 
-const SINGLE_TAP_DELAY_MS = 300;
+/**
+ * Delay before firing single-tap navigation.
+ * Increased so double-tap can be recognized and cancel single-tap.
+ */
+const SINGLE_TAP_DELAY_MS = 450;
 const DRAG_CANCEL_THRESHOLD = 10;
 
 const DraggableAppointmentCard = ({
