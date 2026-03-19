@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Alert, PanResponder, Dimensions } fr
 import { haptics } from '../utils/haptics';
 import { wp, hp, ms, vs } from '../utils/responsive';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import type { ParkZoneBounds, CalendarLayout, UnparkDragGhost } from './AllDaySection';
 import { GlassConfirmModal } from './GlassConfirmModal';
 import Svg, { Path, G, Circle, Ellipse, Defs, LinearGradient, Stop, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend } from 'react-native-svg';
@@ -372,7 +373,11 @@ const ResizeHandle = ({
  * Increased so double-tap can be recognized and cancel single-tap.
  */
 const SINGLE_TAP_DELAY_MS = 450;
+const TAP_MAX_DURATION_MS = 250;
+const DOUBLE_TAP_MAX_DELAY_MS = 280;
+const DRAG_LONG_PRESS_MS = 500;
 const DRAG_CANCEL_THRESHOLD = 10;
+const TEMP_DISABLE_APPOINTMENT_GESTURES = false;
 
 const DraggableAppointmentCard = ({
   appointment,
@@ -403,67 +408,180 @@ const DraggableAppointmentCard = ({
 }) => {
   const longPressFiredRef = useRef(false);
   const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runIdRef = useRef(`run-${Date.now()}`);
+  const sendDebugLog = (
+    hypothesisId: string,
+    location: string,
+    message: string,
+    data: Record<string, unknown>
+  ) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7699/ingest/8c2592ef-b362-4f49-875c-0da790bfbf73', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '53aca5' },
+      body: JSON.stringify({
+        sessionId: '53aca5',
+        runId: runIdRef.current,
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  };
 
   const handleSingleTap = () => {
+    sendDebugLog('H7', 'CalendarMiddleSection.tsx:Draggable:handleSingleTap', 'Single tap scheduled', {
+      appointmentId: appointment.id,
+      delayMs: SINGLE_TAP_DELAY_MS,
+      hadPendingTimeout: Boolean(singleTapTimeoutRef.current),
+    });
     singleTapTimeoutRef.current = setTimeout(() => {
       singleTapTimeoutRef.current = null;
       haptics.light();
+      sendDebugLog('H5', 'CalendarMiddleSection.tsx:Draggable:handleSingleTap', 'Single tap callback fired', {
+        appointmentId: appointment.id,
+        clientName: appointment.clientName,
+      });
       onSingleTap?.();
     }, SINGLE_TAP_DELAY_MS);
   };
 
   const handleDoubleTap = () => {
+    sendDebugLog('H7', 'CalendarMiddleSection.tsx:Draggable:handleDoubleTap', 'Double tap received', {
+      appointmentId: appointment.id,
+      hadPendingTimeout: Boolean(singleTapTimeoutRef.current),
+    });
     if (singleTapTimeoutRef.current) {
       clearTimeout(singleTapTimeoutRef.current);
       singleTapTimeoutRef.current = null;
+      sendDebugLog('H7', 'CalendarMiddleSection.tsx:Draggable:handleDoubleTap', 'Single tap cancelled by double tap', {
+        appointmentId: appointment.id,
+      });
     }
     haptics.medium();
+    sendDebugLog('H5', 'CalendarMiddleSection.tsx:Draggable:handleDoubleTap', 'Double tap callback fired', {
+      appointmentId: appointment.id,
+      clientName: appointment.clientName,
+    });
     onDoubleTap?.();
   };
 
-  const singleTap = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd(handleSingleTap);
-
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(handleDoubleTap);
-
-  const tapCombo = Gesture.Simultaneous(singleTap, doubleTap);
-
-  const longPress = Gesture.LongPress()
-    .minDuration(2000)
-    .onStart((e) => {
+  const handleLongPressStartJS = (absoluteX: number, absoluteY: number) => {
+    try {
       if (singleTapTimeoutRef.current) {
         clearTimeout(singleTapTimeoutRef.current);
         singleTapTimeoutRef.current = null;
       }
       longPressFiredRef.current = true;
       haptics.softConfirm();
-      onDragStart(appointment, e.absoluteX, e.absoluteY);
-    });
+      onDragStart(appointment, absoluteX, absoluteY);
+    } catch (error) {
+      console.error('[CalendarMiddleSection] Drag start crash', {
+        appointmentId: appointment.id,
+        error,
+      });
+    }
+  };
 
-  const pan = Gesture.Pan()
-    .onUpdate((e) => {
+  const handleDragMoveJS = (absoluteX: number, absoluteY: number) => {
+    try {
       if (longPressFiredRef.current) {
-        onDragMove(e.absoluteX, e.absoluteY);
+        onDragMove(absoluteX, absoluteY);
       }
-    })
-    .onEnd((e) => {
+    } catch (error) {
+      console.error('[CalendarMiddleSection] Drag move crash', {
+        appointmentId: appointment.id,
+        error,
+      });
+    }
+  };
+
+  const handleDragEndJS = (
+    absoluteX: number,
+    absoluteY: number,
+    translationX: number,
+    translationY: number
+  ) => {
+    try {
       if (longPressFiredRef.current) {
-        const moved = Math.abs(e.translationX) > DRAG_CANCEL_THRESHOLD || Math.abs(e.translationY) > DRAG_CANCEL_THRESHOLD;
+        const moved =
+          Math.abs(translationX) > DRAG_CANCEL_THRESHOLD ||
+          Math.abs(translationY) > DRAG_CANCEL_THRESHOLD;
         if (!moved) {
           onDragCancel?.();
         } else {
           haptics.medium();
-          onDragEnd(e.absoluteX, e.absoluteY);
+          onDragEnd(absoluteX, absoluteY);
         }
         longPressFiredRef.current = false;
       }
+    } catch (error) {
+      console.error('[CalendarMiddleSection] Drag end crash', {
+        appointmentId: appointment.id,
+        error,
+      });
+    }
+  };
+
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .shouldCancelWhenOutside(false)
+    .onEnd(() => {
+      runOnJS(handleSingleTap)();
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .maxDelay(DOUBLE_TAP_MAX_DELAY_MS)
+    .shouldCancelWhenOutside(false)
+    .onEnd(() => {
+      runOnJS(handleDoubleTap)();
+    });
+
+  const tapCombo = Gesture.Exclusive(doubleTap, singleTap);
+
+  const longPress = Gesture.LongPress()
+    .minDuration(DRAG_LONG_PRESS_MS)
+    .shouldCancelWhenOutside(false)
+    .onStart((e) => {
+      runOnJS(handleLongPressStartJS)(e.absoluteX, e.absoluteY);
+    });
+
+  const pan = Gesture.Pan()
+    .minDistance(ms(1))
+    .shouldCancelWhenOutside(false)
+    .onUpdate((e) => {
+      runOnJS(handleDragMoveJS)(e.absoluteX, e.absoluteY);
+    })
+    .onEnd((e) => {
+      runOnJS(handleDragEndJS)(
+        e.absoluteX,
+        e.absoluteY,
+        e.translationX,
+        e.translationY
+      );
     });
 
   const tapOrLongPress = Gesture.Exclusive(tapCombo, longPress);
   const composed = Gesture.Simultaneous(tapOrLongPress, pan);
+
+  if (TEMP_DISABLE_APPOINTMENT_GESTURES) {
+    const dragOnlyGesture = Gesture.Simultaneous(longPress, pan);
+    return (
+      <View style={styles.appointmentWithResize}>
+        <GestureDetector gesture={dragOnlyGesture}>
+          <View style={{ opacity: isDragging ? 0.4 : 1 }}>
+            <AppointmentCard appointment={appointment} />
+          </View>
+        </GestureDetector>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.appointmentWithResize}>
@@ -505,27 +623,93 @@ const NonDraggableAppointmentCard = ({
   onResizeTerminate?: () => void;
 }) => {
   const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runIdRef = useRef(`run-${Date.now()}`);
+  const sendDebugLog = (
+    hypothesisId: string,
+    location: string,
+    message: string,
+    data: Record<string, unknown>
+  ) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7699/ingest/8c2592ef-b362-4f49-875c-0da790bfbf73', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '53aca5' },
+      body: JSON.stringify({
+        sessionId: '53aca5',
+        runId: runIdRef.current,
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  };
 
   const handleSingleTap = () => {
+    sendDebugLog('H7', 'CalendarMiddleSection.tsx:NonDraggable:handleSingleTap', 'Single tap scheduled', {
+      appointmentId: appointment.id,
+      delayMs: SINGLE_TAP_DELAY_MS,
+      hadPendingTimeout: Boolean(singleTapTimeoutRef.current),
+    });
     singleTapTimeoutRef.current = setTimeout(() => {
       singleTapTimeoutRef.current = null;
       haptics.light();
+      sendDebugLog('H5', 'CalendarMiddleSection.tsx:NonDraggable:handleSingleTap', 'Single tap callback fired', {
+        appointmentId: appointment.id,
+        clientName: appointment.clientName,
+      });
       onSingleTap?.();
     }, SINGLE_TAP_DELAY_MS);
   };
 
   const handleDoubleTap = () => {
+    sendDebugLog('H7', 'CalendarMiddleSection.tsx:NonDraggable:handleDoubleTap', 'Double tap received', {
+      appointmentId: appointment.id,
+      hadPendingTimeout: Boolean(singleTapTimeoutRef.current),
+    });
     if (singleTapTimeoutRef.current) {
       clearTimeout(singleTapTimeoutRef.current);
       singleTapTimeoutRef.current = null;
+      sendDebugLog('H7', 'CalendarMiddleSection.tsx:NonDraggable:handleDoubleTap', 'Single tap cancelled by double tap', {
+        appointmentId: appointment.id,
+      });
     }
     haptics.medium();
+    sendDebugLog('H5', 'CalendarMiddleSection.tsx:NonDraggable:handleDoubleTap', 'Double tap callback fired', {
+      appointmentId: appointment.id,
+      clientName: appointment.clientName,
+    });
     onDoubleTap?.();
   };
 
-  const singleTap = Gesture.Tap().numberOfTaps(1).onEnd(handleSingleTap);
-  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd(handleDoubleTap);
-  const tapCombo = Gesture.Simultaneous(singleTap, doubleTap);
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .shouldCancelWhenOutside(false)
+    .onEnd(() => {
+    runOnJS(handleSingleTap)();
+  });
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .maxDelay(DOUBLE_TAP_MAX_DELAY_MS)
+    .shouldCancelWhenOutside(false)
+    .onEnd(() => {
+    runOnJS(handleDoubleTap)();
+  });
+  const tapCombo = Gesture.Exclusive(doubleTap, singleTap);
+
+  if (TEMP_DISABLE_APPOINTMENT_GESTURES) {
+    return (
+      <View style={styles.appointmentWithResize}>
+        <View>
+          <AppointmentCard appointment={appointment} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.appointmentWithResize}>

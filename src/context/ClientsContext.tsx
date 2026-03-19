@@ -1,16 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CustomerOption } from '../components/CustomerDropdown';
-import { MOCK_CLIENTS } from '../data/clients';
 
 const STORAGE_KEY = '@calendar_clients';
-
-const mockToCustomerOption = (c: { id: string; clientName: string }): CustomerOption => ({
-  id: c.id,
-  name: c.clientName,
-});
-
-const DEFAULT_CLIENTS: CustomerOption[] = MOCK_CLIENTS.map(mockToCustomerOption);
 
 interface ClientsContextType {
   clients: CustomerOption[];
@@ -23,7 +15,7 @@ interface ClientsContextType {
 const ClientsContext = createContext<ClientsContextType | null>(null);
 
 export function ClientsProvider({ children }: { children: React.ReactNode }) {
-  const [clients, setClients] = useState<CustomerOption[]>(DEFAULT_CLIENTS);
+  const [clients, setClients] = useState<CustomerOption[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [lastAddedClient, setLastAddedClient] = useState<CustomerOption | null>(null);
 
@@ -32,7 +24,7 @@ export function ClientsProvider({ children }: { children: React.ReactNode }) {
       if (json) {
         try {
           const parsed = JSON.parse(json);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             setClients(parsed.map((c: CustomerOption) => ({ ...c, id: c.id })));
           }
         } catch {}

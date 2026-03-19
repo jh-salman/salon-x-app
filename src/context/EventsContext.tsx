@@ -34,17 +34,60 @@ function parseEvent(e: PersistedCalendarEvent): CalendarEvent {
 
 interface EventsContextType {
   events: CalendarEvent[];
-  setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
+  setEvents: (value: React.SetStateAction<CalendarEvent[]>) => void;
   addEvent: (event: Omit<CalendarEvent, 'id'>) => void;
   updateEvent: (id: string, updates: Partial<Omit<CalendarEvent, 'id'>>) => void;
 }
 
 const EventsContext = createContext<EventsContextType | null>(null);
 
+function dedupeEventsById(input: CalendarEvent[]): CalendarEvent[] {
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  const output: CalendarEvent[] = [];
+  for (const ev of input) {
+    if (seen.has(ev.id)) {
+      duplicates.push(ev.id);
+      continue;
+    }
+    seen.add(ev.id);
+    output.push(ev);
+  }
+  if (duplicates.length > 0) {
+    // #region agent log
+    fetch('http://127.0.0.1:7699/ingest/8c2592ef-b362-4f49-875c-0da790bfbf73', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '53aca5' },
+      body: JSON.stringify({
+        sessionId: '53aca5',
+        runId: `run-${Date.now()}`,
+        hypothesisId: 'H6',
+        location: 'EventsContext.tsx:dedupeEventsById',
+        message: 'Duplicate event ids detected and removed',
+        data: { duplicateIds: duplicates, duplicateCount: duplicates.length },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    console.error('[EventsContext] Duplicate event ids removed', {
+      duplicateIds: duplicates,
+      duplicateCount: duplicates.length,
+    });
+  }
+  return output;
+}
+
 export function EventsProvider({ children }: { children: React.ReactNode }) {
-  const [events, setEvents] = useState<CalendarEvent[]>(MOCK_EVENTS);
+  const [events, setEventsState] = useState<CalendarEvent[]>(MOCK_EVENTS);
   const [hydrated, setHydrated] = useState(false);
   const idCounterRef = useRef(0);
+
+  const setEvents = React.useCallback((value: React.SetStateAction<CalendarEvent[]>) => {
+    setEventsState((prev) => {
+      const next = typeof value === 'function' ? (value as (prevState: CalendarEvent[]) => CalendarEvent[])(prev) : value;
+      return dedupeEventsById(next);
+    });
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((json) => {

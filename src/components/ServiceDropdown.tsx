@@ -71,6 +71,11 @@ export function ServiceDropdown({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>No services found</Text>
+              </View>
+            }
             renderItem={({ item }) => {
               const isSelected = selectedService?.id === item.id;
               return (
@@ -140,6 +145,11 @@ const styles = StyleSheet.create({
   addNewPlus: { fontSize: ms(18), fontWeight: '600', color: '#000', marginTop: -2 },
   addNewText: { fontFamily: 'Lato_700Bold', fontSize: ms(14), color: '#25AFFF' },
   list: { maxHeight: hp(25) },
+  emptyWrap: {
+    paddingVertical: hp(2),
+    alignItems: 'center',
+  },
+  emptyText: { fontFamily: 'Lato_400Regular', fontSize: ms(13), color: '#A3A3A3' },
   serviceRow: {
     flexDirection: 'row',
     alignItems: 'center',

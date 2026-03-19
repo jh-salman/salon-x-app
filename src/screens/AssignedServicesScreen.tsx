@@ -164,15 +164,23 @@ export function AssignedServicesScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {filteredServices.map((service, index) => (
-          <ServiceRow
-            key={service.id}
-            service={service}
-            index={index}
-            selected={selectedIds.has(service.id)}
-            onPress={() => handleToggle(service.id)}
-          />
-        ))}
+        {filteredServices.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>
+              {services.length === 0 ? 'No services found' : 'No services found'}
+            </Text>
+          </View>
+        ) : (
+          filteredServices.map((service, index) => (
+            <ServiceRow
+              key={service.id}
+              service={service}
+              index={index}
+              selected={selectedIds.has(service.id)}
+              onPress={() => handleToggle(service.id)}
+            />
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -205,6 +213,14 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: hp(6), paddingHorizontal: wp(4) },
+  emptyWrap: {
+    paddingTop: hp(3),
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: RFValue(14),
+    color: '#A3A3A3',
+  },
   serviceRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -77,6 +77,30 @@ export function CalendarScreen() {
   const weekCalendarRef = useRef<CalendarWeekViewRef>(null);
   const SWIPE_SLIDE_OFFSET = ms(56);
   const SWIPE_ANIM_DURATION = 220;
+  const debugRunIdRef = useRef(`run-${Date.now()}`);
+
+  const sendDebugLog = (
+    hypothesisId: string,
+    location: string,
+    message: string,
+    data: Record<string, unknown>
+  ) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7699/ingest/8c2592ef-b362-4f49-875c-0da790bfbf73', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '53aca5' },
+      body: JSON.stringify({
+        sessionId: '53aca5',
+        runId: debugRunIdRef.current,
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  };
 
   const isToday = dayjs(currentDate).isSame(dayjs(), 'day');
 
@@ -261,7 +285,7 @@ export function CalendarScreen() {
       const baseTs = Date.now();
       const repeats = occurrences.slice(1).map((occ, idx) => ({
         ...source,
-        id: `ev-${baseTs}-${idx}`,
+        id: `ev-${baseTs}-${idx}-${occ.start.getTime()}`,
         start: occ.start,
         end: occ.end,
         allDay: false,
@@ -392,10 +416,20 @@ export function CalendarScreen() {
   };
 
   const handleAppointmentPress = (appointment: Appointment) => {
+    sendDebugLog('H1', 'CalendarScreen.tsx:handleAppointmentPress', 'Appointment single tap', {
+      appointmentId: appointment.id,
+      appointmentTitle: appointment.clientName,
+      startTime: appointment.startTime?.toISOString?.(),
+      endTime: appointment.endTime?.toISOString?.(),
+    });
     router.push({ pathname: '/client/[id]', params: { id: `appointment-${appointment.id}` } });
   };
 
   const handleAppointmentDoubleTap = (appointment: Appointment) => {
+    sendDebugLog('H4', 'CalendarScreen.tsx:handleAppointmentDoubleTap', 'Appointment double tap', {
+      appointmentId: appointment.id,
+      appointmentTitle: appointment.clientName,
+    });
     setAppointmentOptionsModal(appointment);
   };
 

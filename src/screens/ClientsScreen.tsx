@@ -1,26 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { format } from 'date-fns';
 import { router } from 'expo-router';
-import { MOCK_CLIENTS } from '../data/clients';
-import type { ClientSummary } from '../data/clients';
 import { wp, hp, ms } from '../utils/responsive';
+import { useClients } from '../context/ClientsContext';
+import type { CustomerOption } from '../components/CustomerDropdown';
 
-function ClientRow({ item }: { item: ClientSummary }) {
+function ClientRow({ item }: { item: CustomerOption }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={() => router.push({ pathname: '/client/[id]', params: { id: item.id } })}
     >
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{item.clientName.charAt(0)}</Text>
+        <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
       </View>
       <View style={styles.rowContent}>
-        <Text style={styles.clientName}>{item.clientName}</Text>
-        <Text style={styles.lastVisit}>
-          Last visit: {format(item.lastVisit, 'MMM d, yyyy')}
-        </Text>
+        <Text style={styles.clientName}>{item.name}</Text>
+        <Text style={styles.lastVisit}>Client profile</Text>
       </View>
       <Text style={styles.chevron}>›</Text>
     </Pressable>
@@ -28,21 +25,23 @@ function ClientRow({ item }: { item: ClientSummary }) {
 }
 
 export function ClientsScreen() {
+  const { clients } = useClients();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Clients</Text>
-        <Text style={styles.subtitle}>{MOCK_CLIENTS.length} clients</Text>
+        <Text style={styles.subtitle}>{clients.length} clients</Text>
       </View>
       <FlatList
-        data={MOCK_CLIENTS}
+        data={clients}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ClientRow item={item} />}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No clients yet</Text>
+            <Text style={styles.emptyText}>No client found</Text>
           </View>
         }
       />

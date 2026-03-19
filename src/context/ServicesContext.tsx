@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ServiceOption } from '../data/services';
-import { MOCK_SERVICES } from '../data/services';
 
 const STORAGE_KEY = '@calendar_services';
 
@@ -16,7 +15,7 @@ interface ServicesContextType {
 const ServicesContext = createContext<ServicesContextType | null>(null);
 
 export function ServicesProvider({ children }: { children: React.ReactNode }) {
-  const [services, setServices] = useState<ServiceOption[]>(MOCK_SERVICES);
+  const [services, setServices] = useState<ServiceOption[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [lastAddedService, setLastAddedService] = useState<ServiceOption | null>(null);
 
@@ -25,7 +24,7 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
       if (json) {
         try {
           const parsed = JSON.parse(json);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             setServices(parsed.map((s: ServiceOption) => ({ ...s, id: s.id })));
           }
         } catch {}

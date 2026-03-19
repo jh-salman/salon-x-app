@@ -1,6 +1,8 @@
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Lato_400Regular, Lato_700Bold } from '@expo-google-fonts/lato';
@@ -15,13 +17,44 @@ import { AssignedServicesProvider } from '../src/context/AssignedServicesContext
 import { SecurityProvider } from '../src/context/SecurityContext';
 import { ThemeProvider } from '../src/context/ThemeContext';
 
+const LOCAL_RESET_DONE_KEY = '@calendar_local_reset_done_v2';
+const LOCAL_DATA_KEYS_TO_CLEAR = [
+  '@calendar_events',
+  '@calendar_services',
+  '@calendar_clients',
+  '@calendar_categories',
+  '@assigned_services',
+];
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Lato_400Regular,
     Lato_700Bold,
   });
+  const [storageReady, setStorageReady] = useState(false);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    let mounted = true;
+    const resetLocalDataOnce = async () => {
+      try {
+        const alreadyReset = await AsyncStorage.getItem(LOCAL_RESET_DONE_KEY);
+        if (!alreadyReset) {
+          await AsyncStorage.multiRemove(LOCAL_DATA_KEYS_TO_CLEAR);
+          await AsyncStorage.setItem(LOCAL_RESET_DONE_KEY, '1');
+        }
+      } catch {
+        // Ignore reset errors to avoid blocking app boot.
+      } finally {
+        if (mounted) setStorageReady(true);
+      }
+    };
+    resetLocalDataOnce();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!fontsLoaded || !storageReady) {
     return <LoadingScreen />;
   }
 

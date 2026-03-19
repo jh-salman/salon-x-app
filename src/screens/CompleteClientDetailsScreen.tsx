@@ -50,7 +50,33 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
   const safeRecommendations = Array.isArray(recommendations) ? recommendations : [];
   const safeProducts = Array.isArray(products) ? products : [];
   const safePersonalNotes = typeof personalNotes === 'string' ? personalNotes : '';
-  const dateStr = format(date, "M.d.yyyy");
+  const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const safeDuration = Number.isFinite(duration) ? duration : 0;
+  // #region agent log
+  fetch('http://127.0.0.1:7699/ingest/8c2592ef-b362-4f49-875c-0da790bfbf73', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '53aca5' },
+    body: JSON.stringify({
+      sessionId: '53aca5',
+      runId: `run-${Date.now()}`,
+      hypothesisId: 'H3',
+      location: 'CompleteClientDetailsScreen.tsx:render',
+      message: 'Rendering client details',
+      data: {
+        clientName: safeClientName,
+        hasPhone: Boolean(phone),
+        dateValid: safeDate instanceof Date && !Number.isNaN(safeDate.getTime()),
+        duration: safeDuration,
+        techniqueNotesCount: safeTechniqueNotes.length,
+        servicesCount: safeServices.length,
+        recommendationsCount: safeRecommendations.length,
+        productsCount: safeProducts.length,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  const dateStr = format(safeDate, "M.d.yyyy");
 
   return (
 
@@ -63,7 +89,7 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
      
 
           <View style={styles.rightDecorationWrap}>
-            <RightDecoration date={date} />
+            <RightDecoration date={safeDate} />
           </View>
 
          
@@ -122,7 +148,7 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
             <SectionCard title="Consultation" cardMinHeight={hp(17)}>
               <View style={styles.consultTopRow}>
                 <Text style={styles.blockTitle}>{dateStr}</Text>
-                <Text style={styles.blockTitle}>{duration} min</Text>
+                <Text style={styles.blockTitle}>{safeDuration} min</Text>
               </View>
               <View style={styles.hr} />
               {safeTechniqueNotes.length > 0 && safeTechniqueNotes.map((note, i) => (
@@ -168,17 +194,17 @@ export default function CompleteClientDetailsScreen({ clientDetails }: CompleteC
               style={styles.cta}
               activeOpacity={0.8}
               onPress={() => {
-                const suggestedDate = addWeeks(date, 5);
-                    const serviceName = safeServices[0]?.name ?? '';
+                const suggestedDate = addWeeks(safeDate, 5);
+                const serviceName = safeServices[0]?.name ?? '';
                 router.push({
                   pathname: '/new-appointment',
                   params: {
                     rebook: '1',
-                        clientName: safeClientName,
+                    clientName: safeClientName,
                     serviceName,
-                    date: date.toISOString(),
+                    date: safeDate.toISOString(),
                     suggestedDate: suggestedDate.toISOString(),
-                    duration: String(duration),
+                    duration: String(safeDuration),
                   },
                 });
               }}
