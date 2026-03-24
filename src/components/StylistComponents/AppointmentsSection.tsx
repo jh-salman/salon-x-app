@@ -19,6 +19,11 @@ export type Appointment = {
   time: string;
 };
 
+export type AppointmentTimerBadge = {
+  timeText: string;
+  status: 'idle' | 'running' | 'paused' | 'done';
+};
+
 const CARD_HEIGHT = vs(50);
 
 /** Viewport height: exactly 4 cards visible; 4+ scroll. */
@@ -33,6 +38,9 @@ type Props = {
   appointments: Appointment[];
   viewportTop: number;
   viewportHeight: number;
+  timerBadgesByAppointmentId?: Record<string, AppointmentTimerBadge | undefined>;
+  /** When set, clicking "Set timer" on any appointment card opens this handler. */
+  onSetTimerPress?: (apt: Appointment) => void;
 };
 
 /**
@@ -43,6 +51,8 @@ export function AppointmentsSection({
   appointments,
   viewportTop,
   viewportHeight,
+  timerBadgesByAppointmentId,
+  onSetTimerPress,
 }: Props) {
   const scrollY = useSharedValue(0);
 
@@ -88,7 +98,9 @@ export function AppointmentsSection({
               scrollY={scrollY}
               railScreenOffsetY={viewportTop}
               screenLeft={STYLIST_CARD_LEFT}
-              showProgressCircle={index < 3}
+              showProgressCircle={false}
+              timerBadge={timerBadgesByAppointmentId?.[item.id]}
+              onSetTimerPress={onSetTimerPress}
             />
           ))}
         </View>

@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { RFValue } from '../../utils/responsive';
 import Animated, {
   SharedValue,
+  cancelAnimation,
   useAnimatedProps,
   useAnimatedStyle,
   useDerivedValue,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
 import { colors } from '../../theme/colors';
@@ -15,6 +20,7 @@ import { STYLIST_CONTENT_PADDING_LEFT } from './stylistConstants';
 import { SetTimerButton } from './SetTimerButton';
 import { buildCardPath, getRightEdgeXs } from './cardPathUtils';
 import { getCountdownLabel } from './stylistCardUtils';
+import type { AppointmentTimerBadge } from './AppointmentsSection';
 
 const TIMER_TRACK = '#666666';
 const TIMER_ACTIVE = '#00d9ff';
@@ -138,6 +144,8 @@ type Props = {
   isWaitlist?: boolean;
   /** When false, show "Set timer" button instead of progress circle (first 3 cards have circle, rest have button). */
   showProgressCircle?: boolean;
+  timerBadge?: AppointmentTimerBadge;
+  onSetTimerPress?: (item: Appointment) => void;
 };
 
 export function MorphAppointmentCard({
@@ -150,10 +158,13 @@ export function MorphAppointmentCard({
   railScreenOffsetY,
   screenLeft,
   isWaitlist = false,
-  showProgressCircle = true,
+  showProgressCircle = false,
+  timerBadge,
+  onSetTimerPress,
 }: Props) {
   const { primaryColor } = useTheme();
   const [countdownLabel, setCountdownLabel] = useState(() => getCountdownLabel(item.time));
+  const timerBlinkOpacity = useSharedValue(1);
 
   /** Progress 0..1 for circular timer (placeholder; no duration data yet). */
   const progressRing = 0.75;
@@ -164,6 +175,22 @@ export function MorphAppointmentCard({
     const interval = setInterval(() => setCountdownLabel(getCountdownLabel(item.time)), 60_000);
     return () => clearInterval(interval);
   }, [item.time]);
+
+  useEffect(() => {
+    if (timerBadge?.status === 'done') {
+      timerBlinkOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.28, { duration: 320 }),
+          withTiming(1, { duration: 320 })
+        ),
+        -1,
+        false
+      );
+      return;
+    }
+    cancelAnimation(timerBlinkOpacity);
+    timerBlinkOpacity.value = 1;
+  }, [timerBadge?.status, timerBlinkOpacity]);
   const cardLeft = screenLeft ?? x;
   const positionLeft = screenLeft != null ? 0 : x;
   const screenY = useDerivedValue(
@@ -253,6 +280,10 @@ export function MorphAppointmentCard({
     opacity: 1,
   }));
 
+  const timerBlinkStyle = useAnimatedStyle(() => ({
+    opacity: timerBlinkOpacity.value,
+  }));
+
   const cardContent = (
     <>
       <Svg width={width} height={height}>
@@ -307,31 +338,61 @@ export function MorphAppointmentCard({
         {/* Left: client name + service name (or "Need attention" for waitlist) */}
         <View style={styles.leftSection}>
           <Text
-            numberOfLines={1}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
             style={[styles.client, isWaitlist && styles.clientWaitlist]}
           >
             {item.client}
           </Text>
-          <Text
-            numberOfLines={1}
-            style={[styles.service, isWaitlist && styles.serviceWaitlist]}
-          >
-            {isWaitlist ? 'Need attention' : item.service}
-          </Text>
+          {isWaitlist ? (
+            <Text
+              numberOfLines={2}
+              style={[styles.service, isWaitlist && styles.serviceWaitlist]}
+            >
+              Need attention
+            </Text>
+          ) : (
+            <View style={styles.serviceTimeRow}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                style={styles.serviceInline}
+              >
+                {item.service}
+              </Text>
+              <Text numberOfLines={1} style={styles.timeInline}>
+                {item.time}
+              </Text>
+            </View>
+          )}
         </View>
 
         {!isWaitlist && (
           <>
-            {/* Middle: time */}
-            <View style={styles.timeWrap}>
-              <Text numberOfLines={1} style={styles.time}>
-                {item.time}
-              </Text>
-            </View>
             <View style={styles.divider} />
-            {/* Right: progress circle (first 3) or Set timer button (rest) */}
+            {/* Right: running timer badge, otherwise progress circle or Set timer button */}
             <View style={styles.timerWrap}>
-              {showProgressCircle ? (
+              {timerBadge ? (
+                <Animated.View style={timerBadge.status === 'done' ? timerBlinkStyle : undefined}>
+                  <Pressable
+                  style={[
+                    styles.timerSquare,
+                    timerBadge.status === 'running' ? [styles.timerSquareRunning, { borderColor: primaryColor }] : null,
+                    timerBadge.status === 'done' ? [styles.timerSquareDone, { borderColor: primaryColor }] : null,
+                    timerBadge.status === 'paused' || timerBadge.status === 'idle' ? styles.timerSquarePaused : null,
+                  ]}
+                  onPress={() => onSetTimerPress?.(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open timer for ${item.client}`}
+                >
+                  <Text numberOfLines={1} style={styles.timerSquareTime}>
+                    {timerBadge.timeText}
+                  </Text>
+                  </Pressable>
+                </Animated.View>
+              ) : showProgressCircle ? (
                 <CircularTimer
                   size={timerSize}
                   strokeWidth={timerStroke}
@@ -343,7 +404,10 @@ export function MorphAppointmentCard({
                   label="remaining"
                 />
               ) : (
-                <SetTimerButton onPress={() => {}} size={timerSize} />
+                <SetTimerButton
+                  onPress={() => onSetTimerPress?.(item)}
+                  size={timerSize}
+                />
               )}
             </View>
           </>
@@ -377,17 +441,25 @@ const styles = StyleSheet.create({
   leftSection: {
     flex: 1,
     minWidth: 0,
-    paddingRight: ms(8),
+    paddingRight: ms(4),
   },
-  timeWrap: {
-    paddingHorizontal: ms(10),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: ms(10),
+  serviceTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    minWidth: 0,
   },
-  time: {
-    fontSize: RFValue(12),
+  serviceInline: {
+    flex: 1,
+    minWidth: 0,
+    color: '#bdbdbd',
+    fontSize: RFValue(10),
+    fontWeight: '400',
+    marginRight: ms(4),
+  },
+  timeInline: {
     color: '#cfcfcf',
+    fontSize: RFValue(9),
+    flexShrink: 0,
   },
   divider: {
     width: StyleSheet.hairlineWidth,
@@ -399,12 +471,42 @@ const styles = StyleSheet.create({
     width: ms(52),
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: ms(10),
+  },
+  timerSquare: {
+    width: ms(44),
+    height: ms(44),
+    borderRadius: ms(8),
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: ms(2),
+  },
+  timerSquareRunning: {
+    borderColor: '#00D9FF',
+    backgroundColor: '#000000',
+  },
+  timerSquareDone: {
+    borderColor: '#00D9FF',
+    backgroundColor: '#000000',
+  },
+  timerSquarePaused: {
+    borderColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: '#000000',
+  },
+  timerSquareTime: {
+    color: '#FFFFFF',
+    fontSize: RFValue(9),
+    fontWeight: '700',
+    letterSpacing: ms(0.5),
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   client: {
     color: '#FFFFFF',
-    fontSize: RFValue(14),
+    fontSize: RFValue(12),
     fontWeight: '700',
-    marginBottom: vs(4),
+    marginBottom: vs(2),
   },
   clientWaitlist: {
     marginBottom: vs(1),
@@ -412,7 +514,7 @@ const styles = StyleSheet.create({
   },
   service: {
     color: '#bdbdbd',
-    fontSize: RFValue(12),
+    fontSize: RFValue(10),
     fontWeight: '400',
   },
   serviceWaitlist: {
