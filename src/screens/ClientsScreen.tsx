@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { wp, hp, ms } from '../utils/responsive';
+import { colors } from '../theme';
 import { useClients } from '../context/ClientsContext';
 import type { CustomerOption } from '../components/CustomerDropdown';
 
@@ -50,7 +51,7 @@ export function ClientsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111' },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: wp(5),
     paddingTop: hp(2),
@@ -59,13 +60,13 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Lato_700Bold',
     fontSize: ms(28),
-    color: 'white',
+    color: '#FFFFFF',
     marginBottom: hp(0.5),
   },
   subtitle: {
     fontFamily: 'Lato_400Regular',
     fontSize: ms(14),
-    color: '#AAA',
+    color: colors.text.secondary,
   },
   listContent: {
     paddingHorizontal: wp(5),
@@ -90,19 +91,19 @@ const styles = StyleSheet.create({
   avatarText: {
     fontFamily: 'Lato_700Bold',
     fontSize: ms(18),
-    color: 'white',
+    color: '#FFFFFF',
   },
   rowContent: { flex: 1 },
   clientName: {
     fontFamily: 'Lato_700Bold',
     fontSize: ms(16),
-    color: 'white',
+    color: '#FFFFFF',
     marginBottom: hp(0.25),
   },
   lastVisit: {
     fontFamily: 'Lato_400Regular',
     fontSize: ms(12),
-    color: '#AAA',
+    color: colors.text.secondary,
   },
   chevron: {
     fontFamily: 'Lato_400Regular',

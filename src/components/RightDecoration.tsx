@@ -31,16 +31,20 @@ export interface RightDecorationProps {
   date?: Date;
   /** Optional gradient colors for the half curved line [start, mid?, end]. Default: pink → purple → cyan */
   lineColors?: [string, string] | [string, string, string];
+  /** When false, hides only the curved half-line (keeps background shape + date). */
+  showLine?: boolean;
 }
 
-export const RightDecoration = ({ date = new Date(), lineColors }: RightDecorationProps) => {
+export const RightDecoration = ({ date = new Date(), lineColors, showLine = true }: RightDecorationProps) => {
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.rightDecorationContainer} pointerEvents="box-none">
       <BackgroundShape />
-      <View style={[styles.halfCurvedLineAboveSafeArea, { top: -insets.top }]} pointerEvents="none">
-        <HalfCurvedLine id="rightDecorationLine" colors={lineColors} />
-      </View>
+      {showLine ? (
+        <View style={[styles.halfCurvedLineAboveSafeArea, { top: -insets.top }]} pointerEvents="none">
+          <HalfCurvedLine id="rightDecorationLine" colors={lineColors} />
+        </View>
+      ) : null}
       <RightDateDisplay date={date} />
     </View>
   );

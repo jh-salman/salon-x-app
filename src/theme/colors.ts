@@ -8,9 +8,14 @@ export const highlightColors = {
 /** Default for current build (Boss: "right now just think with neon pink"). */
 export const defaultHighlight = highlightColors.neonPink;
 
+/** True-black canvas + slightly lifted surfaces (high contrast vs white type, WhatsApp-dark–like). */
 export const colors = {
-  background: '#111',
+  background: '#000000',
+  /** Cards, inputs, pills — one step above canvas so neon borders read clearly. */
+  bg: '#0F1419',
   brand: '#25AFFF',
+  /** App-wide primary accent (default neon pink). */
+  primary: highlightColors.neonPink,
   border: {
     accent: '#14def3',
     divider: 'rgba(142, 142, 147, 0.5)',
@@ -42,16 +47,17 @@ export const colors = {
   },
   text: {
     primary: '#FFFFFF',
-    secondary: '#FFFFFF',
-    muted: '#FFFFFF',
-    weekMuted: '#FFFFFF',
-    /** Muted gray for secondary labels (e.g. service name, time on stylist screen) */
-    mutedSecondary: '#afafaf',
+    /** Secondary lines: bright enough to read at a glance (not “dull grey”). */
+    secondary: 'rgba(255,255,255,0.88)',
+    muted: 'rgba(255,255,255,0.72)',
+    weekMuted: 'rgba(255,255,255,0.82)',
+    /** Muted gray for tertiary metadata — still lighter than old #afafaf */
+    mutedSecondary: '#B8C0C8',
   },
   /** Stylist overlay: card background, nav bar, header */
   surface: {
-    card: 'rgba(26, 26, 26, 0.95)',
-    nav: '#161923',
+    card: 'rgba(15, 20, 25, 0.97)',
+    nav: '#0A0C0E',
     header: '#726D6D',
   },
 };

@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { format } from 'date-fns';
-import { ms } from '../utils/responsive';
+import { ms, vs } from '../utils/responsive';
 import { colors as themeColors } from '../theme';
 
 const VERTICAL_ACCENT_WIDTH = 3;
@@ -35,15 +35,60 @@ const svgPaths = {
   alarm: 'M6.70319 6.5157L5.01819 5.51569V3.2507C5.01819 3.0507 4.85819 2.8907 4.65819 2.8907H4.62819C4.42819 2.8907 4.26819 3.0507 4.26819 3.2507V5.61069C4.26819 5.78569 4.35819 5.9507 4.51319 6.0407L6.33819 7.13569C6.50819 7.23569 6.72819 7.18569 6.82819 7.01569C6.93319 6.84069 6.87819 6.61569 6.70319 6.5157V6.5157ZM9.35819 1.3957L7.81819 0.115695C7.60819 -0.0593048 7.29319 -0.0343048 7.11319 0.180695C6.93819 0.390695 6.96819 0.705695 7.17819 0.885695L8.71319 2.1657C8.92319 2.3407 9.23819 2.3157 9.41819 2.1007C9.59819 1.8907 9.56819 1.5757 9.35819 1.3957V1.3957ZM0.818191 2.1657L2.35319 0.885695C2.56819 0.705695 2.59819 0.390695 2.41819 0.180695C2.24319 -0.0343048 1.92819 -0.0593048 1.71819 0.115695L0.178191 1.3957C-0.0318086 1.5757 -0.0618086 1.8907 0.118191 2.1007C0.293191 2.3157 0.608191 2.3407 0.818191 2.1657ZM4.76819 0.890695C2.28319 0.890695 0.268191 2.9057 0.268191 5.3907C0.268191 7.8757 2.28319 9.8907 4.76819 9.8907C7.25319 9.8907 9.26819 7.8757 9.26819 5.3907C9.26819 2.9057 7.25319 0.890695 4.76819 0.890695ZM4.76819 8.8907C2.83819 8.8907 1.26819 7.32069 1.26819 5.3907C1.26819 3.4607 2.83819 1.8907 4.76819 1.8907C6.69819 1.8907 8.26819 3.4607 8.26819 5.3907C6.69819 8.8907 8.26819 8.8907 4.76819 8.8907Z',
 };
 
-const AlarmIcon = ({ color }: { color: string }) => (
-  <View style={styles.alarmIcon}>
-    <View style={styles.alarmIconInner}>
-      <Svg width={9.53638} height={9.8907} viewBox="0 0 9.53638 9.8907" fill="none">
-        <Path d={svgPaths.alarm} fill={color} />
-      </Svg>
-    </View>
-  </View>
-);
+const AlarmIcon = ({
+  color,
+  size,
+  pulsing,
+}: {
+  color: string;
+  size: number;
+  pulsing?: boolean;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!pulsing) {
+      scaleAnim.setValue(1);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.22,
+          duration: 420,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 420,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [pulsing, scaleAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.alarmIcon,
+        { width: size, height: size },
+        pulsing ? { transform: [{ scale: scaleAnim }] } : null,
+      ]}
+    >
+      <View style={styles.alarmIconInner}>
+        <Svg width={size} height={size} viewBox="0 0 9.53638 9.8907" fill="none">
+          <Path d={svgPaths.alarm} fill={color} />
+        </Svg>
+      </View>
+    </Animated.View>
+  );
+};
 
 type CardLayoutTier = 'compact' | 'medium' | 'full';
 
@@ -163,7 +208,19 @@ export function AppointmentCard({ appointment, opacity }: { appointment: Appoint
   const colors = appointmentColors[appointment.color];
   const durationMinutes = (appointment.endTime.getTime() - appointment.startTime.getTime()) / (1000 * 60);
   const height = durationMinutes * PIXELS_PER_MINUTE;
-  const cardOpacity = opacity ?? (appointment.isParked ? 0.9 : 1);
+  // Keep appointment text bright & readable (especially when parked).
+  const cardOpacity = opacity ?? 1;
+  const alarmIconSize = (() => {
+    // Make alarm icon size responsive for short vs long appointments.
+    // Map duration range: 15 min -> smaller, 120 min -> larger.
+    const minDur = 15;
+    const maxDur = 120;
+    const clamped = Math.max(minDur, Math.min(maxDur, durationMinutes));
+    const t = (clamped - minDur) / (maxDur - minDur);
+    const minSize = ms(14);
+    const maxSize = ms(22);
+    return minSize + (maxSize - minSize) * t;
+  })();
   const tier = getCardTierConfig(durationMinutes);
   const hasProcessTime =
     appointment.processingTimeStart != null &&
@@ -197,6 +254,11 @@ export function AppointmentCard({ appointment, opacity }: { appointment: Appoint
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
         />
+        {appointment.hasAlarm ? (
+          <View style={styles.alarmTopCenterWrap} pointerEvents="none">
+            <AlarmIcon color={colors.indicator} size={alarmIconSize} pulsing />
+          </View>
+        ) : null}
         <View style={[styles.verticalAccent, { backgroundColor: colors.indicator }]} />
         <View
           style={[
@@ -282,6 +344,11 @@ export function AppointmentCard({ appointment, opacity }: { appointment: Appoint
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
         />
+        {appointment.hasAlarm ? (
+          <View style={styles.alarmTopCenterWrap} pointerEvents="none">
+            <AlarmIcon color={colors.indicator} size={alarmIconSize} pulsing />
+          </View>
+        ) : null}
         <View style={[styles.verticalAccent, { backgroundColor: colors.indicator }]} />
         <View
           style={[
@@ -348,6 +415,11 @@ export function AppointmentCard({ appointment, opacity }: { appointment: Appoint
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
       />
+      {appointment.hasAlarm ? (
+        <View style={styles.alarmTopCenterWrap} pointerEvents="none">
+          <AlarmIcon color={colors.indicator} size={alarmIconSize} pulsing />
+        </View>
+      ) : null}
       <View style={[styles.verticalAccent, { backgroundColor: colors.indicator }]} />
       <View
         style={[
@@ -372,18 +444,15 @@ export function AppointmentCard({ appointment, opacity }: { appointment: Appoint
             {appointment.service}
           </Text>
         </View>
-        {appointment.hasAlarm && (
-          <View style={[styles.appointmentTimeContainer, { marginBottom: tier.gap }]}>
-            <AlarmIcon color={colors.indicator} />
-            <Text
-              style={[styles.appointmentTimeBase, { color: '#FFFFFF', fontSize: tier.timeFont, lineHeight: tier.timeLineHeight }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {format(appointment.startTime, 'h:mm')} - {format(appointment.endTime, 'h:mm a').toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <View style={[styles.appointmentTimeContainer, { marginBottom: tier.gap }]}>
+          <Text
+            style={[styles.appointmentTimeBase, { color: '#FFFFFF', fontSize: tier.timeFont, lineHeight: tier.timeLineHeight }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {format(appointment.startTime, 'h:mm')} - {format(appointment.endTime, 'h:mm a').toUpperCase()}
+          </Text>
+        </View>
         {hasProcessTime && processStartTime && processEndTime && (
           <Text
             style={[styles.appointmentProcessTimeBase, { color: colors.serviceText, fontSize: tier.processTimeFont }]}
@@ -425,7 +494,17 @@ const styles = StyleSheet.create({
   appointmentServiceBase: { fontFamily: 'Lato-SemiBold' },
   appointmentTimeContainer: { flexDirection: 'row', alignItems: 'center', gap: ms(2) },
   appointmentTimeBase: { fontFamily: 'Lato-Medium', textTransform: 'uppercase' as const },
-  appointmentProcessTimeBase: { fontFamily: 'Lato-Medium', opacity: 0.9 },
+  appointmentProcessTimeBase: { fontFamily: 'Lato-Medium', opacity: 1 },
   alarmIcon: { width: ms(12), height: ms(12), overflow: 'hidden', position: 'relative' },
   alarmIconInner: { position: 'absolute', left: '10.27%', right: '10.26%', top: '9.24%', bottom: '8.33%' },
+  alarmTopCenterWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: vs(4),
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    elevation: 10,
+  },
 });

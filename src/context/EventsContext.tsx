@@ -5,6 +5,8 @@ import { MOCK_EVENTS } from '../data/events';
 import { LoadingScreen } from '../components/LoadingScreen';
 
 const STORAGE_KEY = '@calendar_events';
+const SEEDED_KEY = '@calendar_events_seed_version';
+const CURRENT_SEED_VERSION = 'v3';
 
 type PersistedCalendarEvent = Omit<CalendarEvent, 'start' | 'end' | 'waitlistAddedAt'> & {
   start: Date | string;
@@ -90,29 +92,55 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((json) => {
-      if (json) {
-        try {
-          const parsed = JSON.parse(json);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const loaded = parsed.map(parseEvent);
-            const waitlistMock = MOCK_EVENTS.filter((e) => e.waitlistAddedAt != null);
-            const waitlistIds = new Set(waitlistMock.map((e) => e.id));
-            const merged = loaded.map((e) => {
-              if (waitlistIds.has(e.id)) {
-                const fromMock = waitlistMock.find((m) => m.id === e.id);
-                return fromMock ? { ...fromMock, start: e.start, end: e.end } : e;
-              }
-              return e;
-            });
-            const mergedIds = new Set(merged.map((e) => e.id));
-            const toAdd = waitlistMock.filter((e) => !mergedIds.has(e.id));
-            setEvents([...merged, ...toAdd]);
-          }
-        } catch {}
+    (async () => {
+      try {
+        const [json, seeded] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEY),
+          AsyncStorage.getItem(SEEDED_KEY),
+        ]);
+
+        // If mock seed version changed, overwrite stored events once.
+        if (seeded !== CURRENT_SEED_VERSION) {
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_EVENTS));
+          await AsyncStorage.setItem(SEEDED_KEY, CURRENT_SEED_VERSION);
+          setEvents(MOCK_EVENTS);
+          setHydrated(true);
+          return;
+        }
+
+        if (json) {
+          try {
+            const parsed = JSON.parse(json);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const loaded = parsed.map(parseEvent);
+              const waitlistMock = MOCK_EVENTS.filter((e: CalendarEvent) => e.waitlistAddedAt != null);
+              const waitlistIds = new Set(waitlistMock.map((e: CalendarEvent) => e.id));
+              const merged = loaded.map((e: CalendarEvent) => {
+                if (waitlistIds.has(e.id)) {
+                  const fromMock = waitlistMock.find((m: CalendarEvent) => m.id === e.id);
+                  return fromMock ? { ...fromMock, start: e.start, end: e.end } : e;
+                }
+                return e;
+              });
+              const mergedIds = new Set(merged.map((e: CalendarEvent) => e.id));
+              const toAdd = waitlistMock.filter((e: CalendarEvent) => !mergedIds.has(e.id));
+              setEvents([...merged, ...toAdd]);
+            }
+          } catch {}
+
+          setHydrated(true);
+          return;
+        }
+
+        // First-launch seed (no stored data yet)
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_EVENTS));
+        await AsyncStorage.setItem(SEEDED_KEY, CURRENT_SEED_VERSION);
+      } catch {
+        // If storage is unavailable, fall back to in-memory MOCK_EVENTS.
+      } finally {
+        setHydrated(true);
       }
-      setHydrated(true);
-    });
+    })();
   }, []);
 
   useEffect(() => {

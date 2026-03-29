@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useCallback, useEffect, useState, useImperative
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions, TouchableOpacity } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { ms } from '../utils/responsive';
+import { colors } from '../theme';
 import { format, addDays, isSameDay, isToday } from 'date-fns';
 import type { Appointment } from './CalendarMiddleSection';
 import CalendarMiddleSection, { WeekViewTimeAxis, WEEK_VIEW_CONTENT_HEIGHT } from './CalendarMiddleSection';
@@ -386,7 +387,7 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(142, 142, 147, 0.2)',
   },
   dayColumnSelected: { backgroundColor: 'rgba(37, 175, 255, 0.06)' },
-  dayHeader: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#111', alignItems: 'center', height: WEEK_VIEW_HEADER_HEIGHT },
+  dayHeader: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: colors.background, alignItems: 'center', height: WEEK_VIEW_HEADER_HEIGHT },
   dayHeaderTop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dayLabel: { fontSize: 10, color: '#FFFFFF', fontWeight: '600' },
   waitlistIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#25AFFF' },

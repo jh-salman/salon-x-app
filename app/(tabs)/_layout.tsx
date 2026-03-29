@@ -12,7 +12,7 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: primaryColor,
         tabBarInactiveTintColor: colors.nav.icon,
-        tabBarStyle: { backgroundColor: '#111', height: vs(49), paddingBottom: vs(5), paddingTop: vs(2) },
+        tabBarStyle: { backgroundColor: colors.background, height: vs(49), paddingBottom: vs(5), paddingTop: vs(2) },
       }}
     >
       <Tabs.Screen

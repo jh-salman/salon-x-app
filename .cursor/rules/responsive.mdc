@@ -1,38 +1,67 @@
 ---
-description: Use only react-native-responsive-screen and react-native-responsive-fontsize for all responsive styling
+description: Enforce responsive styling with ms/vs/moderateScale/wp/hp; no raw numbers
 globs: "**/*.tsx,**/*.ts"
 alwaysApply: true
 ---
 
-# Responsive styling
+# Responsive Styling Rules (ms / vs)
 
-Always use these two packages for responsive values in this project:
+All numeric values in styles must be responsive. Do not use raw numbers like `10`, `44`, `-6`, `14`.
 
-1. **react-native-responsive-screen** – layout (width/height, padding, margins)
-2. **react-native-responsive-fontsize** – font sizes
-
-Import from `../utils/responsive` (or the correct relative path):
-
-- **`wp(n)`** – width percentage (from react-native-responsive-screen)
-- **`hp(n)`** – height percentage (from react-native-responsive-screen)
-- **`RFValue(size)`** – responsive font size (from react-native-responsive-fontsize)
-
-Examples:
+## Required import (match this project)
 
 ```ts
-import { wp, hp, RFValue } from '../utils/responsive';
-
-const styles = StyleSheet.create({
-  box: {
-    paddingHorizontal: wp(4),
-    paddingVertical: hp(2),
-    marginTop: hp(1.5),
-  },
-  title: {
-    fontSize: RFValue(20),
-    lineHeight: RFValue(24),
-  },
-});
+import { ms, vs, wp, hp, RFValue, scale } from '../utils/responsive';
 ```
 
-Do not use raw pixel numbers for layout or font sizes; use `wp`, `hp`, or `RFValue` so the UI scales across devices.
+In this repo, `ms()` is already `moderateScale()` and `vs()` is `verticalScale()`. Prefer using `ms`/`vs` directly.
+
+## Core mapping
+
+- `ms(n)` -> horizontal values
+- `vs(n)` -> vertical values
+- `moderateScale(n)` -> font size only
+- `wp(x)` -> width percent layout
+- `hp(x)` -> height percent layout
+
+### Horizontal -> `ms()`
+- `paddingLeft`, `paddingRight`, `paddingHorizontal`
+- `marginLeft`, `marginRight`, `marginHorizontal`
+- `left`, `right`
+- `borderRadius`
+- small widths / icon sizes
+
+### Vertical -> `vs()`
+- `paddingTop`, `paddingBottom`, `paddingVertical`
+- `marginTop`, `marginBottom`, `marginVertical`
+- `top`, `bottom`
+- fixed component heights
+
+### Fonts -> `moderateScale()`
+Use only:
+
+```ts
+fontSize: ms(14)
+```
+
+`RFValue()` is allowed when matching existing code patterns, but prefer `ms()` for new code.
+
+### Width / Height percentages
+Use:
+
+```ts
+width: wp(90)
+height: hp(30)
+```
+
+## Strict rules
+
+- Never use raw style numbers (except `flex`, `zIndex`, and fontWeight numeric values).
+- Use responsive negatives, e.g. `marginTop: -vs(6)`, `left: -ms(4)`.
+- Keep border radii responsive: `borderRadius: ms(8)` or `ms(999)`.
+
+## Layout guidance
+
+- Prefer Flexbox.
+- Avoid unnecessary absolute positioning.
+- Use absolute only for overlays, floating controls, or badge-like elements.

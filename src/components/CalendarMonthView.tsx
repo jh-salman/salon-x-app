@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions, Animated } from 'react-native';
 import { wp, hp, ms } from '../utils/responsive';
+import { colors } from '../theme';
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, isToday } from 'date-fns';
 import type { CalendarEvent } from '../data/events';
 
@@ -141,7 +142,7 @@ export default function CalendarMonthView({ selectedDate, events, onDateSelect, 
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111', paddingHorizontal: 12 },
+  container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 12 },
   header: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(142, 142, 147, 0.2)' },
   headerCell: { alignItems: 'center' },
   headerText: { fontSize: 10, color: '#FFFFFF', fontWeight: '600' },

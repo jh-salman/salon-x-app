@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from 'dayjs';
 import { isSameDay, format, addDays, subDays, addWeeks } from 'date-fns';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CalendarHeaderDynamic, { type ViewMode } from '../components/CalendarHeaderDynamic';
 import { RightDecoration } from '../components/RightDecoration';
 import { LeftDecoration } from '../components/LeftDecoration';
@@ -18,6 +19,11 @@ import { GlassConfirmModal } from '../components/GlassConfirmModal';
 import { useEvents } from '../context/EventsContext';
 import type { CalendarEvent } from '../data/events';
 import { wouldCauseThirdOverlap } from '../utils/overbookCheck';
+import {
+  purgeServiceTimersForAppointmentIds,
+  SERVICE_TIMERS_STORAGE_KEY,
+} from '../utils/serviceTimersStorage';
+import { purgeStopwatchForAppointmentIds } from '../utils/stopwatchCardStorage';
 import { ms, vs } from '../utils/responsive';
 import { haptics } from '../utils/haptics';
 
@@ -46,6 +52,10 @@ const FIVE_DAY_COUNT = 5;
 const MAX_RESCHEDULE_WEEKS = 10;
 const MAX_REPEAT_APPOINTMENTS = 10;
 const BOOK_BUTTON_COLOR = '#FA1BFE';
+type StoredServiceTimer = {
+  appointmentId: string;
+  status: 'idle' | 'running' | 'paused' | 'done';
+};
 
 export function CalendarScreen() {
   const router = useRouter();
@@ -70,6 +80,7 @@ export function CalendarScreen() {
   const [repeatAppointments, setRepeatAppointments] = useState(1);
   const [conflictResolution, setConflictResolution] = useState<ConflictResolutionState | null>(null);
   const [unparkDragGhost, setUnparkDragGhost] = useState<UnparkDragGhost | null>(null);
+  const [runningTimerAppointmentIds, setRunningTimerAppointmentIds] = useState<string[]>([]);
 
   const swipeSlideAnim = useRef(new Animated.Value(0)).current;
   const weekSlideAnim = useRef(new Animated.Value(0)).current;
@@ -105,6 +116,33 @@ export function CalendarScreen() {
   const isToday = dayjs(currentDate).isSame(dayjs(), 'day');
 
   useEffect(() => {
+    let mounted = true;
+    const refreshRunningTimers = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SERVICE_TIMERS_STORAGE_KEY);
+        if (!mounted || !raw) {
+          if (mounted) setRunningTimerAppointmentIds([]);
+          return;
+        }
+        const parsed = JSON.parse(raw) as Record<string, StoredServiceTimer>;
+        const ids = Object.values(parsed)
+          .filter((t) => t?.status === 'running' && !!t.appointmentId)
+          .map((t) => t.appointmentId);
+        setRunningTimerAppointmentIds(ids);
+      } catch {
+        if (mounted) setRunningTimerAppointmentIds([]);
+      }
+    };
+
+    refreshRunningTimers();
+    const interval = setInterval(refreshRunningTimers, 2500);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isToday) return;
     const interval = setInterval(() => setLiveTime(dayjs()), 30000);
     return () => clearInterval(interval);
@@ -120,11 +158,11 @@ export function CalendarScreen() {
         startTime: e.start,
         endTime: e.end,
         color: hexToColorCategory(e.color),
-        hasAlarm: true,
+          hasAlarm: runningTimerAppointmentIds.includes(e.id),
         processingTimeStart: e.processingTimeStart,
         processingTimeEnd: e.processingTimeEnd,
       }));
-  }, [events, currentDate]);
+  }, [events, currentDate, runningTimerAppointmentIds]);
 
   /** Global toolbar: all parked appointments (same in Day + Week; hidden in Month) */
   const parkedEvents = useMemo(
@@ -200,13 +238,13 @@ export function CalendarScreen() {
           startTime: e.start,
           endTime: e.end,
           color: hexToColorCategory(e.color),
-          hasAlarm: true,
+          hasAlarm: runningTimerAppointmentIds.includes(e.id),
           processingTimeStart: e.processingTimeStart,
           processingTimeEnd: e.processingTimeEnd,
         }));
     });
     return map;
-  }, [events, weekDates]);
+  }, [events, weekDates, runningTimerAppointmentIds]);
 
   /** Week grid columns: per-day all-day + waitlist only (parked show in global toolbar above) */
   const allDayByDay = useMemo(() => {
@@ -265,6 +303,8 @@ export function CalendarScreen() {
   };
 
   const applyResolvedOccurrences = (appointmentId: string, occurrences: PlannedOccurrence[]) => {
+    void purgeServiceTimersForAppointmentIds([appointmentId]);
+    void purgeStopwatchForAppointmentIds([appointmentId]);
     setEvents((prev) => {
       const source = prev.find((e) => e.id === appointmentId);
       if (!source || occurrences.length === 0) return prev;
@@ -313,6 +353,8 @@ export function CalendarScreen() {
   };
 
   const handleParkAppointment = (id: string) => {
+    void purgeServiceTimersForAppointmentIds([id]);
+    void purgeStopwatchForAppointmentIds([id]);
     setEvents((prev) =>
       prev.map((e) =>
         e.id === id
@@ -343,6 +385,11 @@ export function CalendarScreen() {
       const moved = prev.find((e) => e.id === id);
       if (!moved) return prev;
       const seriesId = moved.seriesId;
+      const idsToClearTimers = seriesId
+        ? prev.filter((e) => e.seriesId === seriesId).map((e) => e.id)
+        : [id];
+      void purgeServiceTimersForAppointmentIds(idsToClearTimers);
+      void purgeStopwatchForAppointmentIds(idsToClearTimers);
       const deltaMs = newStart.getTime() - moved.start.getTime();
       if (seriesId) {
         return prev.map((e) => {

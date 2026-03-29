@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   StyleSheet,
@@ -19,8 +20,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
 import { format, isSameDay } from 'date-fns';
 import { useEvents } from '../context/EventsContext';
+import type { AppointmentStopwatchPersist } from '../data/types';
 import type { Appointment, AppointmentTimerBadge } from '../components/StylistComponents/AppointmentsSection';
 import { useTheme } from '../context/ThemeContext';
+import { colors } from '../theme';
 import { MuseButton } from '../components/MuseButton';
 import { StylistLayout, StylistRailCurve } from '../components/StylistComponents/StylistLayout';
 import { MainBrandingCard } from '../components/StylistComponents/MainBrandingCard';
@@ -41,6 +44,15 @@ import {
   SUB_BRANDING_CARD_HEIGHT,
 } from '../components/StylistComponents/stylistConstants';
 import { vs, ms, hp, wp, RFValue } from '../utils/responsive';
+import {
+  SERVICE_TIMERS_STORAGE_KEY,
+  subscribeServiceTimersInvalidate,
+} from '../utils/serviceTimersStorage';
+import { haptics } from '../utils/haptics';
+import {
+  STOPWATCH_CARD_STORAGE_KEY,
+  subscribeStopwatchCardInvalidate,
+} from '../utils/stopwatchCardStorage';
 
 const CONTAINER_BG = '#000';
 const SHAPE_BG = '#1B1818';
@@ -90,7 +102,6 @@ const TIMER_BODY_TOP_INSET = vs(36);
 const TIMER_ITEM_HEIGHT = vs(24);
 const TIMER_VISIBLE_ITEMS = 5;
 const TIMER_WHEEL_HEIGHT = TIMER_ITEM_HEIGHT * TIMER_VISIBLE_ITEMS;
-const SERVICE_TIMERS_STORAGE_KEY = '@stylist_service_timers_v1';
 
 type ServiceTimerStatus = 'idle' | 'running' | 'paused' | 'done';
 
@@ -117,11 +128,19 @@ function normalizeKey(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
-/** "Mary" → "Mary's", "James" → "James'" */
-function possessiveClientName(name: string): string {
-  const t = name.trim();
-  if (!t) return '';
-  return t.toLowerCase().endsWith('s') ? `${t}'` : `${t}'s`;
+function pickServiceLabel(event: {
+  service?: string;
+  clientName?: string;
+  title?: string;
+}): string {
+  const service = event.service?.trim();
+  if (service) return service;
+
+  // Backward compatibility: some older data used `clientName` to hold service text.
+  const legacyService = event.clientName?.trim();
+  if (legacyService && legacyService !== event.title?.trim()) return legacyService;
+
+  return '—';
 }
 
 function withAlpha(hexColor: string, alpha: number): string {
@@ -156,6 +175,30 @@ function formatClock(totalMs: number): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
+/** Elapsed stopwatch: centiseconds for smooth updates; hours if needed. */
+function formatStopwatch(totalMs: number): string {
+  const ms = Math.max(0, Math.floor(totalMs));
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const cs = Math.floor((ms % 1000) / 10);
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+  }
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+type TimerPanelMode = 'timer' | 'stopwatch';
+
+/** Set Timer button: minutes and seconds only (no centiseconds or hours). */
+function formatStopwatchCardLabel(totalMs: number): string {
+  const ms = Math.max(0, Math.floor(totalMs));
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 /** Compact card label: 3:07 or 42:18 for quick glance. */
 function formatTimerBadgeClock(totalMs: number): string {
   const totalSec = Math.max(0, Math.floor(totalMs / 1000));
@@ -180,8 +223,10 @@ function useTodayAppointments(): Appointment[] {
     const sorted = [...timed].sort((a, b) => a.start.getTime() - b.start.getTime());
     return sorted.map((e) => ({
       id: e.id,
-      client: e.clientName ?? e.title ?? '—',
-      service: e.service ?? '—',
+      // Stylist card should always show person name here.
+      client: e.title ?? e.clientName ?? '—',
+      // Service area should show service/service list name(s).
+      service: pickServiceLabel(e),
       time: `${format(e.start, 'h:mm a')} – ${format(e.end, 'h:mm a')}`,
     }));
   }, [events]);
@@ -197,9 +242,36 @@ export default function StylistScreen() {
   const [nowEpoch, setNowEpoch] = useState<number>(() => Date.now());
   const [timersById, setTimersById] = useState<Record<string, ServiceTimerState>>({});
   const [timersHydrated, setTimersHydrated] = useState(false);
+  const [timerPanelMode, setTimerPanelMode] = useState<TimerPanelMode>('timer');
+  const [swAccumulatedMs, setSwAccumulatedMs] = useState(0);
+  const [swStartedAtEpoch, setSwStartedAtEpoch] = useState<number | undefined>(undefined);
+  const [swTick, setSwTick] = useState(0);
+  const [stopwatchByAppointmentId, setStopwatchByAppointmentId] = useState<
+    Record<string, AppointmentStopwatchPersist>
+  >({});
+  const [stopwatchHydrated, setStopwatchHydrated] = useState(false);
+  const [stopwatchUiNow, setStopwatchUiNow] = useState(() => Date.now());
+  const swPersistRef = useRef<Record<string, AppointmentStopwatchPersist>>({});
+  const swAccRef = useRef(0);
+  const swStartRef = useRef<number | undefined>(undefined);
+  const setTimerTargetRef = useRef<Appointment | null>(null);
+  const doneHapticsTriggeredRef = useRef<Set<string>>(new Set());
   const timerPanelTranslateX = useSharedValue(-TIMER_PANEL_SLIDE_WIDTH);
   const activeTimer = setTimerTarget ? timersById[buildTimerId(setTimerTarget)] : undefined;
   const activeRemainingMs = activeTimer ? computeRemainingMs(activeTimer, nowEpoch) : 0;
+
+  useEffect(() => {
+    swPersistRef.current = stopwatchByAppointmentId;
+  }, [stopwatchByAppointmentId]);
+
+  useEffect(() => {
+    swAccRef.current = swAccumulatedMs;
+    swStartRef.current = swStartedAtEpoch;
+  }, [swAccumulatedMs, swStartedAtEpoch]);
+
+  useEffect(() => {
+    setTimerTargetRef.current = setTimerTarget;
+  }, [setTimerTarget]);
 
   const openSetTimer = useCallback((apt: Appointment) => {
     const now = new Date();
@@ -208,9 +280,41 @@ export default function StylistScreen() {
     setPickerDate(now);
     setPickedHour(0);
     setPickedMinute(0);
+    const sw = swPersistRef.current[apt.id];
+    const hasStopwatchSession =
+      sw != null && (sw.startedAtEpoch != null || sw.accumulatedMs > 0);
+    setTimerPanelMode(hasStopwatchSession ? 'stopwatch' : 'timer');
+    setSwAccumulatedMs(sw?.accumulatedMs ?? 0);
+    setSwStartedAtEpoch(sw?.startedAtEpoch);
+    setSwTick(0);
   }, []);
 
   const closeSetTimer = useCallback(() => {
+    const target = setTimerTargetRef.current;
+    if (target) {
+      const aid = target.id;
+      const t = Date.now();
+      const acc = swAccRef.current;
+      const start = swStartRef.current;
+      if (start != null || acc > 0) {
+        setStopwatchByAppointmentId((prev) => ({
+          ...prev,
+          [aid]: {
+            appointmentId: aid,
+            accumulatedMs: acc,
+            startedAtEpoch: start,
+            updatedAtEpoch: t,
+          },
+        }));
+      } else {
+        setStopwatchByAppointmentId((prev) => {
+          if (!prev[aid]) return prev;
+          const next = { ...prev };
+          delete next[aid];
+          return next;
+        });
+      }
+    }
     timerPanelTranslateX.value = withTiming(
       -TIMER_PANEL_SLIDE_WIDTH,
       { duration: 220 },
@@ -222,10 +326,13 @@ export default function StylistScreen() {
     );
   }, [timerPanelTranslateX]);
 
-  useEffect(() => {
+  const loadTimersFromStorage = useCallback((markHydrated: boolean) => {
     AsyncStorage.getItem(SERVICE_TIMERS_STORAGE_KEY)
       .then((raw) => {
-        if (!raw) return;
+        if (!raw) {
+          setTimersById({});
+          return;
+        }
         try {
           const parsed = JSON.parse(raw) as Record<string, ServiceTimerState>;
           if (parsed && typeof parsed === 'object') {
@@ -236,9 +343,63 @@ export default function StylistScreen() {
         }
       })
       .finally(() => {
-        setTimersHydrated(true);
+        if (markHydrated) setTimersHydrated(true);
       });
   }, []);
+
+  useEffect(() => {
+    loadTimersFromStorage(true);
+  }, [loadTimersFromStorage]);
+
+  useEffect(() => {
+    return subscribeServiceTimersInvalidate(() => loadTimersFromStorage(false));
+  }, [loadTimersFromStorage]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTimersFromStorage(false);
+    }, [loadTimersFromStorage])
+  );
+
+  const loadStopwatchFromStorage = useCallback((markHydrated: boolean) => {
+    AsyncStorage.getItem(STOPWATCH_CARD_STORAGE_KEY)
+      .then((raw) => {
+        if (!raw) {
+          setStopwatchByAppointmentId({});
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw) as Record<string, AppointmentStopwatchPersist>;
+          if (parsed && typeof parsed === 'object') {
+            setStopwatchByAppointmentId(parsed);
+          }
+        } catch {
+          // Ignore malformed storage.
+        }
+      })
+      .finally(() => {
+        if (markHydrated) setStopwatchHydrated(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    loadStopwatchFromStorage(true);
+  }, [loadStopwatchFromStorage]);
+
+  useEffect(() => {
+    return subscribeStopwatchCardInvalidate(() => loadStopwatchFromStorage(false));
+  }, [loadStopwatchFromStorage]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStopwatchFromStorage(false);
+    }, [loadStopwatchFromStorage])
+  );
+
+  useEffect(() => {
+    if (!stopwatchHydrated) return;
+    AsyncStorage.setItem(STOPWATCH_CARD_STORAGE_KEY, JSON.stringify(stopwatchByAppointmentId)).catch(() => {});
+  }, [stopwatchByAppointmentId, stopwatchHydrated]);
 
   useEffect(() => {
     if (!timersHydrated) return;
@@ -258,6 +419,10 @@ export default function StylistScreen() {
           if (timer.status !== 'running') continue;
           const remainingMs = computeRemainingMs(timer, now);
           if (remainingMs <= 0) {
+            if (!doneHapticsTriggeredRef.current.has(id)) {
+              doneHapticsTriggeredRef.current.add(id);
+              void haptics.timerDoneJiggle();
+            }
             next[id] = {
               ...timer,
               status: 'done',
@@ -281,12 +446,84 @@ export default function StylistScreen() {
     }
   }, [setTimerTarget, timerPanelTranslateX]);
 
+  useEffect(() => {
+    if (swStartedAtEpoch == null) return;
+    const id = setInterval(() => setSwTick((t) => t + 1), 50);
+    return () => clearInterval(id);
+  }, [swStartedAtEpoch]);
+
+  useEffect(() => {
+    if (setTimerTarget != null) return;
+    setTimerPanelMode('timer');
+  }, [setTimerTarget]);
+
+  useEffect(() => {
+    const anyRunning = Object.values(stopwatchByAppointmentId).some((s) => s.startedAtEpoch != null);
+    if (!anyRunning) return;
+    const id = setInterval(() => setStopwatchUiNow(Date.now()), 50);
+    return () => clearInterval(id);
+  }, [stopwatchByAppointmentId]);
+
+  const swElapsedMs = useMemo(() => {
+    const base = swAccumulatedMs;
+    if (swStartedAtEpoch != null) {
+      return base + (Date.now() - swStartedAtEpoch);
+    }
+    return base;
+  }, [swAccumulatedMs, swStartedAtEpoch, swTick]);
+
+  const stopwatchReset = useCallback(() => {
+    if (!setTimerTarget) return;
+    const aid = setTimerTarget.id;
+    setSwAccumulatedMs(0);
+    setSwStartedAtEpoch(undefined);
+    setSwTick(0);
+    setStopwatchByAppointmentId((prev) => {
+      const next = { ...prev };
+      delete next[aid];
+      return next;
+    });
+  }, [setTimerTarget]);
+
+  const stopwatchToggleRunning = useCallback(() => {
+    if (!setTimerTarget) return;
+    const aid = setTimerTarget.id;
+    if (swStartedAtEpoch != null) {
+      const now = Date.now();
+      const nextAcc = swAccumulatedMs + (now - swStartedAtEpoch);
+      setSwAccumulatedMs(nextAcc);
+      setSwStartedAtEpoch(undefined);
+      setStopwatchByAppointmentId((prev) => ({
+        ...prev,
+        [aid]: {
+          appointmentId: aid,
+          accumulatedMs: nextAcc,
+          startedAtEpoch: undefined,
+          updatedAtEpoch: now,
+        },
+      }));
+    } else {
+      const now = Date.now();
+      setSwStartedAtEpoch(now);
+      setStopwatchByAppointmentId((prev) => ({
+        ...prev,
+        [aid]: {
+          appointmentId: aid,
+          accumulatedMs: swAccumulatedMs,
+          startedAtEpoch: now,
+          updatedAtEpoch: now,
+        },
+      }));
+    }
+  }, [setTimerTarget, swStartedAtEpoch, swAccumulatedMs]);
+
   const handleSetTimer = useCallback(() => {
     if (!setTimerTarget) return;
     const durationMs =
       pickedHour * 3600 * 1000 + pickedMinute * 60 * 1000;
     const now = Date.now();
     const timerId = buildTimerId(setTimerTarget);
+    doneHapticsTriggeredRef.current.delete(timerId);
     setTimersById((prev) => ({
       ...(prev[timerId]
         ? prev
@@ -314,6 +551,7 @@ export default function StylistScreen() {
     if (durationMs <= 0) return;
     const now = Date.now();
     const timerId = buildTimerId(setTimerTarget);
+    doneHapticsTriggeredRef.current.delete(timerId);
     setTimersById((prev) => ({
       ...(prev[timerId]
         ? prev
@@ -338,6 +576,7 @@ export default function StylistScreen() {
     if (!setTimerTarget) return;
     const timerId = buildTimerId(setTimerTarget);
     const now = Date.now();
+    doneHapticsTriggeredRef.current.delete(timerId);
     setTimersById((prev) => {
       const timer = prev[timerId];
       if (!timer || timer.status === 'done') return prev;
@@ -378,6 +617,7 @@ export default function StylistScreen() {
     if (!setTimerTarget) return;
     const timerId = buildTimerId(setTimerTarget);
     const now = Date.now();
+    doneHapticsTriggeredRef.current.delete(timerId);
     setTimersById((prev) => {
       const timer = prev[timerId];
       if (!timer) return prev;
@@ -397,6 +637,18 @@ export default function StylistScreen() {
   const timerPanelStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: timerPanelTranslateX.value }],
   }));
+
+  const stopwatchCardLabelsByAppointmentId = useMemo(() => {
+    const now = stopwatchUiNow;
+    const out: Record<string, string> = {};
+    for (const [aptId, sw] of Object.entries(stopwatchByAppointmentId)) {
+      const running = sw.startedAtEpoch != null;
+      const elapsed = sw.accumulatedMs + (running ? now - (sw.startedAtEpoch ?? 0) : 0);
+      if (!running && sw.accumulatedMs === 0) continue;
+      out[aptId] = formatStopwatchCardLabel(elapsed);
+    }
+    return out;
+  }, [stopwatchByAppointmentId, stopwatchUiNow]);
 
   const timerBadgesByAppointmentId = useMemo<Record<string, AppointmentTimerBadge>>(() => {
     const badges: Record<string, AppointmentTimerBadge> = {};
@@ -441,6 +693,7 @@ export default function StylistScreen() {
             viewportTop={VIEWPORT_TOP}
             viewportHeight={VIEWPORT_HEIGHT}
             timerBadgesByAppointmentId={timerBadgesByAppointmentId}
+            stopwatchCardLabelsByAppointmentId={stopwatchCardLabelsByAppointmentId}
             onSetTimerPress={openSetTimer}
           />
           <WaitlistTitleCard
@@ -486,74 +739,143 @@ export default function StylistScreen() {
           >
             <View style={styles.timerPanelInner}>
               <View style={styles.timerHeaderCenter}>
-                {possessiveClientName(setTimerTarget.client) ? (
-                  <Text style={styles.timerHeaderTitleRow} numberOfLines={2}>
-                    <Text style={styles.timerHeaderTitlePlain}>Set </Text>
-                    <Text style={[styles.timerHeaderTitleName, { color: primaryColor }]}>
-                      {possessiveClientName(setTimerTarget.client)}
-                    </Text>
-                    <Text style={styles.timerHeaderTitlePlain}> time</Text>
-                  </Text>
-                ) : (
-                  <Text style={[styles.timerHeaderTitleRow, styles.timerHeaderTitlePlain]} numberOfLines={1}>
-                    Set time
-                  </Text>
-                )}
-                <Text style={styles.timerHeaderService} numberOfLines={2}>
-                  {setTimerTarget.service}
+                <Text style={[styles.timerHeaderMode, { color: primaryColor }]} numberOfLines={1}>
+                  {activeTimer ? 'Timer' : timerPanelMode === 'timer' ? 'Timer' : 'Stopwatch'}
+                </Text>
+                <Text style={styles.timerHeaderClient} numberOfLines={2}>
+                  {setTimerTarget.client.trim() || '—'}
                 </Text>
               </View>
 
               {!activeTimer ? (
                 <View style={styles.timerPanelBody}>
-                  <View style={styles.timerPickerCenter}>
-                    <View style={styles.timerPickerWrap}>
-                      <DateTimePicker
-                        value={pickerDate}
-                        mode="time"
-                        display="spinner"
-                        is24Hour
-                        locale="en_GB"
-                        onChange={(_ev, d) => {
-                          if (!d) return;
-                          setPickerDate(d);
-                          setPickedHour(d.getHours());
-                          setPickedMinute(d.getMinutes());
-                        }}
-                        themeVariant="dark"
-                        style={[
-                          styles.timerNativePicker,
-                          Platform.OS === 'android'
-                            ? [styles.timerNativePickerAndroid, { borderColor: withAlpha(primaryColor, 0.35) }]
-                            : undefined,
-                        ]}
-                      />
-                    </View>
+                  <View style={styles.timerIdleMain}>
+                    {timerPanelMode === 'timer' ? (
+                      <View style={styles.timerPickerCenter}>
+                        <View style={styles.timerPickerWrap}>
+                          <DateTimePicker
+                            value={pickerDate}
+                            mode="time"
+                            display="spinner"
+                            is24Hour
+                            locale="en_GB"
+                            onChange={(_ev, d) => {
+                              if (!d) return;
+                              setPickerDate(d);
+                              setPickedHour(d.getHours());
+                              setPickedMinute(d.getMinutes());
+                            }}
+                            themeVariant="dark"
+                            style={[
+                              styles.timerNativePicker,
+                              Platform.OS === 'android'
+                                ? [styles.timerNativePickerAndroid, { borderColor: withAlpha(primaryColor, 0.35) }]
+                                : undefined,
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.timerStopwatchCenter}>
+                        <Text style={styles.timerStopwatchClock} numberOfLines={1}>
+                          {formatStopwatch(swElapsedMs)}
+                        </Text>
+                        <View style={styles.timerStopwatchBtnRow}>
+                          <Pressable
+                            style={[
+                              styles.timerStopwatchRoundBtn,
+                              { borderColor: withAlpha(primaryColor, 0.45) },
+                            ]}
+                            onPress={stopwatchReset}
+                            accessibilityRole="button"
+                            accessibilityLabel="Reset stopwatch"
+                          >
+                            <Text style={styles.timerStopwatchRoundBtnText}>Reset</Text>
+                          </Pressable>
+                          <Pressable
+                            style={[
+                              styles.timerStopwatchRoundBtn,
+                              styles.timerStopwatchRoundBtnPrimary,
+                              {
+                                borderColor: withAlpha(primaryColor, 0.75),
+                                backgroundColor: withAlpha(primaryColor, 0.2),
+                              },
+                            ]}
+                            onPress={stopwatchToggleRunning}
+                            accessibilityRole="button"
+                            accessibilityLabel={swStartedAtEpoch != null ? 'Pause stopwatch' : 'Start stopwatch'}
+                          >
+                            <Text style={[styles.timerStopwatchRoundBtnText, { color: primaryColor }]}>
+                              {swStartedAtEpoch != null ? 'Pause' : 'Start'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                  <View style={styles.timerBottomActions}>
+                  {timerPanelMode === 'timer' ? (
                     <Pressable
                       style={[
-                        styles.timerCircleBtn,
-                        styles.timerCancelCircle,
-                        { borderColor: withAlpha(primaryColor, 0.45) },
-                      ]}
-                      onPress={closeSetTimer}
-                    >
-                      <Text style={[styles.timerCircleText, styles.timerCancelCircleText]}>Cancel</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.timerCircleBtn,
-                        styles.timerStartCircle,
+                        styles.timerPanelPrimaryBtn,
                         {
-                          backgroundColor: withAlpha(primaryColor, 0.18),
-                          borderColor: withAlpha(primaryColor, 0.55),
+                          borderColor: withAlpha(primaryColor, 0.72),
+                          backgroundColor: withAlpha(primaryColor, 0.2),
                         },
                       ]}
                       onPress={handleStartFromPicker}
+                      accessibilityRole="button"
+                      accessibilityLabel="Start service timer"
                     >
-                      <Text style={[styles.timerCircleText, styles.timerStartCircleText, { color: primaryColor }]}>
-                        Start
+                      <Text style={[styles.timerPanelPrimaryBtnText, { color: primaryColor }]}>Start</Text>
+                    </Pressable>
+                  ) : null}
+                  <View style={styles.timerModeSwitchRow}>
+                    <Pressable
+                      style={[
+                        styles.timerModeSegment,
+                        timerPanelMode === 'timer'
+                          ? {
+                              borderColor: withAlpha(primaryColor, 0.72),
+                              backgroundColor: withAlpha(primaryColor, 0.24),
+                            }
+                          : styles.timerModeSegmentIdle,
+                      ]}
+                      onPress={() => setTimerPanelMode('timer')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Timer"
+                      accessibilityState={{ selected: timerPanelMode === 'timer' }}
+                    >
+                      <Text
+                        style={[
+                          styles.timerModeSegmentText,
+                          timerPanelMode === 'timer' ? { color: primaryColor } : styles.timerModeSegmentTextMuted,
+                        ]}
+                      >
+                        Timer
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.timerModeSegment,
+                        timerPanelMode === 'stopwatch'
+                          ? {
+                              borderColor: withAlpha(primaryColor, 0.55),
+                              backgroundColor: withAlpha(primaryColor, 0.14),
+                            }
+                          : styles.timerModeSegmentIdle,
+                      ]}
+                      onPress={() => setTimerPanelMode('stopwatch')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Stopwatch"
+                      accessibilityState={{ selected: timerPanelMode === 'stopwatch' }}
+                    >
+                      <Text
+                        style={[
+                          styles.timerModeSegmentText,
+                          timerPanelMode === 'stopwatch' ? { color: primaryColor } : styles.timerModeSegmentTextMuted,
+                        ]}
+                      >
+                        Stopwatch
                       </Text>
                     </Pressable>
                   </View>
@@ -587,14 +909,26 @@ export default function StylistScreen() {
                     <Pressable
                       style={styles.timerChangeLink}
                       onPress={() => {
-                        const timerId = setTimerTarget ? buildTimerId(setTimerTarget) : '';
-                        if (!timerId) return;
+                        const apt = setTimerTarget;
+                        if (!apt) return;
+                        const timerId = buildTimerId(apt);
+                        doneHapticsTriggeredRef.current.delete(timerId);
                         setTimersById((prev) => {
                           if (!prev[timerId]) return prev;
                           const next = { ...prev };
                           delete next[timerId];
                           return next;
                         });
+                        setStopwatchByAppointmentId((prev) => {
+                          if (!prev[apt.id]) return prev;
+                          const next = { ...prev };
+                          delete next[apt.id];
+                          return next;
+                        });
+                        setSwAccumulatedMs(0);
+                        setSwStartedAtEpoch(undefined);
+                        setSwTick(0);
+                        setTimerPanelMode('timer');
                       }}
                     >
                       <Text style={[styles.timerChangeLinkText, { color: primaryColor }]}>Change time</Text>
@@ -668,13 +1002,70 @@ const styles = StyleSheet.create({
     paddingHorizontal: ms(8),
     paddingBottom: hp(0.6),
   },
-  timerHeaderService: {
-    marginTop: vs(4),
-    fontSize: RFValue(13),
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.62)',
+  timerHeaderMode: {
+    fontSize: RFValue(22),
+    fontWeight: '800',
     textAlign: 'center',
-    lineHeight: RFValue(17),
+    letterSpacing: ms(0.5),
+  },
+  timerHeaderClient: {
+    marginTop: vs(6),
+    fontSize: RFValue(16),
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: RFValue(21),
+  },
+  /** Primary = Timer (left), secondary = Stopwatch (right), anchored to bottom of panel. */
+  timerModeSwitchRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(6),
+    paddingHorizontal: ms(4),
+    marginTop: vs(4),
+    paddingBottom: hp(0.6),
+  },
+  timerIdleMain: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  timerPanelPrimaryBtn: {
+    width: '100%',
+    marginTop: vs(6),
+    paddingVertical: vs(9),
+    paddingHorizontal: ms(12),
+    borderRadius: ms(11),
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerPanelPrimaryBtnText: {
+    fontSize: RFValue(13),
+    fontWeight: '700',
+  },
+  timerModeSegment: {
+    flex: 1,
+    minHeight: vs(36),
+    borderRadius: ms(10),
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: vs(7),
+    paddingHorizontal: ms(6),
+  },
+  timerModeSegmentIdle: {
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(22,22,22,0.92)',
+  },
+  timerModeSegmentText: {
+    fontSize: RFValue(12),
+    fontWeight: '700',
+  },
+  timerModeSegmentTextMuted: {
+    color: 'rgba(255,255,255,0.48)',
   },
   timerPanelBody: {
     flex: 1,
@@ -694,29 +1085,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
     alignSelf: 'stretch',
-    borderRadius: "100%",
+    borderRadius: ms(999),
     overflow: 'hidden',
+  },
+  timerStopwatchCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: vs(80),
+    gap: vs(16),
+    paddingHorizontal: ms(8),
+  },
+  timerStopwatchClock: {
+    color: '#FFFFFF',
+    fontSize: RFValue(36),
+    fontWeight: '700',
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  timerStopwatchBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: ms(14),
+    flexWrap: 'wrap',
+  },
+  timerStopwatchRoundBtn: {
+    minWidth: ms(96),
+    paddingHorizontal: ms(16),
+    paddingVertical: vs(10),
+    borderRadius: ms(999),
+    borderWidth: 1,
+    backgroundColor: 'rgba(22,22,22,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerStopwatchRoundBtnPrimary: {
+    backgroundColor: 'rgba(22,22,22,0.92)',
+  },
+  timerStopwatchRoundBtnText: {
+    color: '#FFFFFF',
+    fontSize: RFValue(13),
+    fontWeight: '700',
   },
   timerNativePicker: {
     width: '100%',
     height: hp(24),
   },
   timerNativePickerAndroid: {
-    backgroundColor: '#111111',
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderRadius: ms(999),
-  },
-  timerHeaderTitleRow: {
-    fontSize: RFValue(19),
-    fontWeight: '800',
-    textAlign: 'center',
-    lineHeight: RFValue(25),
-  },
-  timerHeaderTitlePlain: {
-    color: '#FFFFFF',
-  },
-  timerHeaderTitleName: {
-    fontWeight: '800',
   },
   timerCenterHighlight: {
     position: 'absolute',
@@ -837,38 +1256,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255,255,255,0.28)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: ms(4),
-  },
-  timerBottomActions: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: vs(14),
-    paddingBottom: hp(0.8),
-  },
-  timerCircleBtn: {
-    width: ms(52),
-    height: ms(52),
-    borderRadius: ms(26),
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  timerCancelCircle: {
-    backgroundColor: 'rgba(22,22,22,0.92)',
-  },
-  timerStartCircle: {
-    backgroundColor: 'rgba(22,22,22,0.92)',
-  },
-  timerCircleText: {
-    fontSize: RFValue(10),
-    fontWeight: '600',
-  },
-  timerCancelCircleText: {
-    color: 'rgba(255,255,255,0.42)',
-  },
-  timerStartCircleText: {
-    color: '#FFFFFF',
   },
   timerRunningWrap: {
     flex: 1,

@@ -1,34 +1,73 @@
 ---
-description: Use responsive utils for all numeric layout/size values (no raw pixels)
+description: Enforce responsive styling with ms/vs/moderateScale/wp/hp; no raw numbers
 globs: "**/*.tsx,**/*.ts"
 alwaysApply: true
 ---
 
-# Responsive numeric values
+# Responsive Styling Rules (ms / vs)
 
-When using **any numeric value** for layout, spacing, or size, always use the project's responsive utilities. Do **not** use raw pixel numbers (e.g. `5`, `44`, `-6`, `2`).
+All numeric values in styles must be responsive. Do not use raw numbers like `10`, `44`, `-6`, `14`.
 
-## Import from `../utils/responsive` (or correct path)
+## Required import (match this project)
 
-- **`ms(n)`** – horizontal spacing, widths, horizontal padding/margin, font sizes (moderateScale)
-- **`vs(n)`** – vertical spacing, heights, vertical padding/margin (verticalScale)
-- **`wp(n)`** – width as % of screen (widthPercentageToDP)
-- **`hp(n)`** – height as % of screen (heightPercentageToDP)
-- **`RFValue(n)`** – font sizes in styles (react-native-responsive-fontsize)
+```ts
+import { ms, vs, wp, hp, RFValue, scale } from '../utils/responsive';
+```
 
-## Do
+In this repo, `ms()` is already `moderateScale()` and `vs()` is `verticalScale()`. Prefer using `ms`/`vs` directly.
 
-- `paddingLeft: ms(40)`  
-- `height: vs(44)`  
-- `marginTop: vs(-6)` or `marginTop: -ms(6)` for small offsets  
-- `fontSize: RFValue(14)`  
-- `width: wp(80)` for percentage-based width  
+## Core mapping
 
-## Don't
+- `ms(n)` -> horizontal values
+- `vs(n)` -> vertical values
+- `ms(n)` -> font sizes (preferred)
+- `wp(x)` -> width percent layout
+- `hp(x)` -> height percent layout
 
-- `paddingLeft: 40`  
-- `height: 44`  
-- `marginTop: -6`  
-- `fontSize: 14`  
+### Horizontal -> `ms()`
+- `paddingLeft`, `paddingRight`, `paddingHorizontal`
+- `marginLeft`, `marginRight`, `marginHorizontal`
+- `left`, `right`
+- `borderRadius`
+- small widths / icon sizes
 
-If you need a small offset (e.g. “5px left”), use `ms(5)` or `vs(5)` instead of raw `5`. For arithmetic, keep values responsive: e.g. `ms(40) - ms(5)` or define a constant like `const offset = ms(5)` and use it.
+### Vertical -> `vs()`
+- `paddingTop`, `paddingBottom`, `paddingVertical`
+- `marginTop`, `marginBottom`, `marginVertical`
+- `top`, `bottom`
+- fixed component heights
+
+### Fonts -> `moderateScale()`
+Use only:
+
+```ts
+fontSize: ms(14)
+```
+
+`RFValue()` is allowed when matching existing code patterns, but prefer `ms()` for new code.
+
+### Width / Height percentages
+Use:
+
+```ts
+width: wp(90)
+height: hp(30)
+```
+
+## Strict rules
+
+- Never use raw style numbers (except `flex`, `zIndex`, and fontWeight numeric values).
+- Use responsive negatives, e.g. `marginTop: -vs(6)`, `left: -ms(4)`.
+- Keep border radii responsive: `borderRadius: ms(8)` or `ms(999)`.
+
+## Layout guidance
+
+- Prefer Flexbox.
+- Avoid unnecessary absolute positioning.
+- Use absolute only for overlays, floating controls, or badge-like elements.
+
+## Quality guidance
+
+- Prefer `StyleSheet.create()`.
+- Avoid non-trivial inline style objects.
+- Keep style keys reusable and grouped by section.

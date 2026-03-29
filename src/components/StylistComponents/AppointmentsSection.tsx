@@ -39,6 +39,8 @@ type Props = {
   viewportTop: number;
   viewportHeight: number;
   timerBadgesByAppointmentId?: Record<string, AppointmentTimerBadge | undefined>;
+  /** Stopwatch reading on Set Timer button (when no service timer badge). */
+  stopwatchCardLabelsByAppointmentId?: Record<string, string | undefined>;
   /** When set, clicking "Set timer" on any appointment card opens this handler. */
   onSetTimerPress?: (apt: Appointment) => void;
 };
@@ -52,6 +54,7 @@ export function AppointmentsSection({
   viewportTop,
   viewportHeight,
   timerBadgesByAppointmentId,
+  stopwatchCardLabelsByAppointmentId,
   onSetTimerPress,
 }: Props) {
   const scrollY = useSharedValue(0);
@@ -100,6 +103,7 @@ export function AppointmentsSection({
               screenLeft={STYLIST_CARD_LEFT}
               showProgressCircle={false}
               timerBadge={timerBadgesByAppointmentId?.[item.id]}
+              stopwatchCardLabel={stopwatchCardLabelsByAppointmentId?.[item.id]}
               onSetTimerPress={onSetTimerPress}
             />
           ))}

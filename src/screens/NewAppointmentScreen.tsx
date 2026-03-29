@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import dayjs from 'dayjs';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, G } from 'react-native-svg';
+import { colors } from '../theme';
 import { useEvents } from '../context/EventsContext';
 import { wouldCauseThirdOverlap } from '../utils/overbookCheck';
 import { useServices } from '../context/ServicesContext';
@@ -479,7 +480,7 @@ export function NewAppointmentScreen() {
                       }
                     }}
                     themeVariant="dark"
-                    style={Platform.OS === 'android' ? { backgroundColor: '#1a1a1a' } : undefined}
+                    style={Platform.OS === 'android' ? { backgroundColor: colors.bg } : undefined}
                   />
                   {Platform.OS === 'android' && (
                     <DateTimePicker
@@ -744,7 +745,7 @@ const styles = StyleSheet.create({
   },
   inputField: {
     minHeight: vs(38),
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
     borderRadius: ms(8),
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -781,7 +782,7 @@ const styles = StyleSheet.create({
   switch: { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] },
   notesField: {
     minHeight: hp(12),
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
     borderRadius: ms(8),
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -869,7 +870,7 @@ const styles = StyleSheet.create({
   },
   bookSingleToggle: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
     borderRadius: ms(8),
     padding: ms(2),
     borderWidth: 0.5,
@@ -898,7 +899,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   dateTimePickerCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
     borderTopLeftRadius: ms(16),
     borderTopRightRadius: ms(16),
     paddingBottom: hp(4),

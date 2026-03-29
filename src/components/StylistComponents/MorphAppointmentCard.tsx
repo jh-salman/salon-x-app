@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Image } from 'react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { RFValue } from '../../utils/responsive';
 import Animated, {
@@ -145,6 +145,8 @@ type Props = {
   /** When false, show "Set timer" button instead of progress circle (first 3 cards have circle, rest have button). */
   showProgressCircle?: boolean;
   timerBadge?: AppointmentTimerBadge;
+  /** Shown on Set Timer area when no service timer badge (persisted stopwatch). */
+  stopwatchCardLabel?: string;
   onSetTimerPress?: (item: Appointment) => void;
 };
 
@@ -160,6 +162,7 @@ export function MorphAppointmentCard({
   isWaitlist = false,
   showProgressCircle = false,
   timerBadge,
+  stopwatchCardLabel,
   onSetTimerPress,
 }: Props) {
   const { primaryColor } = useTheme();
@@ -335,7 +338,7 @@ export function MorphAppointmentCard({
       </Svg>
 
       <View style={styles.content}>
-        {/* Left: client name + service name (or "Need attention" for waitlist) */}
+        {/* Left: client name + appointment time (or waitlist text) */}
         <View style={styles.leftSection}>
           <Text
             numberOfLines={2}
@@ -353,25 +356,22 @@ export function MorphAppointmentCard({
               Need attention
             </Text>
           ) : (
-            <View style={styles.serviceTimeRow}>
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}
-                style={styles.serviceInline}
-              >
-                {item.service}
-              </Text>
-              <Text numberOfLines={1} style={styles.timeInline}>
-                {item.time}
-              </Text>
-            </View>
+            <Text numberOfLines={2} style={styles.timeUnderClient}>
+              {item.time}
+            </Text>
           )}
         </View>
 
         {!isWaitlist && (
           <>
-            <View style={styles.divider} />
+            <View style={styles.middleSection}>
+              <Text
+                numberOfLines={3}
+                style={styles.serviceMiddle}
+              >
+                {item.service}
+              </Text>
+            </View>
             {/* Right: running timer badge, otherwise progress circle or Set timer button */}
             <View style={styles.timerWrap}>
               {timerBadge ? (
@@ -387,9 +387,19 @@ export function MorphAppointmentCard({
                   accessibilityRole="button"
                   accessibilityLabel={`Open timer for ${item.client}`}
                 >
-                  <Text numberOfLines={1} style={styles.timerSquareTime}>
-                    {timerBadge.timeText}
-                  </Text>
+                  {timerBadge.status === 'done' ? (
+                    <View style={styles.timerLogoWrap}>
+                      <Image
+                        source={require('../../../assets/salonx.png')}
+                        style={styles.timerLogoImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : (
+                    <Text numberOfLines={1} style={styles.timerSquareTime}>
+                      {timerBadge.timeText}
+                    </Text>
+                  )}
                   </Pressable>
                 </Animated.View>
               ) : showProgressCircle ? (
@@ -407,6 +417,8 @@ export function MorphAppointmentCard({
                 <SetTimerButton
                   onPress={() => onSetTimerPress?.(item)}
                   size={timerSize}
+                  displayLabel={stopwatchCardLabel}
+                  primaryColor={primaryColor}
                 />
               )}
             </View>
@@ -431,8 +443,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: {
-    ...StyleSheet.absoluteFillObject,
-    width: '70%',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: '77%',
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: STYLIST_CONTENT_PADDING_LEFT,
@@ -443,35 +458,31 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingRight: ms(4),
   },
-  serviceTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    minWidth: 0,
-  },
-  serviceInline: {
-    flex: 1,
-    minWidth: 0,
-    color: '#bdbdbd',
-    fontSize: RFValue(10),
-    fontWeight: '400',
-    marginRight: ms(4),
-  },
-  timeInline: {
+  timeUnderClient: {
     color: '#cfcfcf',
     fontSize: RFValue(9),
-    flexShrink: 0,
+    lineHeight: RFValue(11),
+    marginTop: vs(1),
   },
-  divider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-    backgroundColor: '#6C6C6C',
-    marginRight: ms(4),
+  middleSection: {
+    width: ms(108),
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: ms(4),
+    marginRight: ms(2),
+  },
+  serviceMiddle: {
+    color: '#bdbdbd',
+    fontSize: RFValue(10),
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: RFValue(12),
   },
   timerWrap: {
     width: ms(52),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: ms(10),
+    marginRight: ms(8),
   },
   timerSquare: {
     width: ms(44),
@@ -501,6 +512,16 @@ const styles = StyleSheet.create({
     letterSpacing: ms(0.5),
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
+  },
+  timerLogoWrap: {
+    width: ms(28),
+    height: ms(28),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerLogoImage: {
+    width: ms(18),
+    height: ms(18),
   },
   client: {
     color: '#FFFFFF',

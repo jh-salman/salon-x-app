@@ -2,7 +2,7 @@
  * Clients: types and helpers. All types in ./types.ts; mock in ./mockData.ts.
  */
 
-import type { AppointmentLike, ClientDetails } from './types';
+import type { AppointmentLike, CalendarEvent, ClientDetails } from './types';
 import { MOCK_CLIENT_DETAILS } from './mockData';
 
 export type { ClientDetails, ClientSummary, Service, Product, AppointmentLike } from './types';
@@ -48,4 +48,34 @@ export function getClientDetailsForAppointment(apt: AppointmentLike): ClientDeta
     recommendations: [],
     products: [],
   };
+}
+
+/**
+ * Resolve `ClientDetails` for a client route id (`client-*` or `appointment-*`) + live calendar events.
+ */
+export function resolveClientDetailsForRouteId(
+  normalizedId: string,
+  events: CalendarEvent[]
+): ClientDetails | null {
+  if (normalizedId.startsWith('appointment-')) {
+    const eventId = normalizedId.replace('appointment-', '');
+    const event = events.find((e) => e.id === eventId);
+    if (!event) {
+      return null;
+    }
+    const hasValidStart =
+      event.start instanceof Date && !Number.isNaN(event.start.getTime());
+    const hasValidEnd = event.end instanceof Date && !Number.isNaN(event.end.getTime());
+    if (!hasValidStart || !hasValidEnd) {
+      return null;
+    }
+    return getClientDetailsForAppointment({
+      id: event.id,
+      clientName: event.title,
+      service: event.clientName || event.service || '',
+      startTime: event.start,
+      endTime: event.end,
+    });
+  }
+  return MOCK_CLIENT_DETAILS[normalizedId] ?? null;
 }
