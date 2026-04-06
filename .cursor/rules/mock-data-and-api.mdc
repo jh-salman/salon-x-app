@@ -1,0 +1,41 @@
+---
+description: Single mock data file and backend API replacement guide
+globs: "**/*.ts,**/*.tsx"
+alwaysApply: true
+---
+
+# Mock data and backend API
+
+## 1. All types in one file
+
+- **File:** `src/data/types.ts`
+- Every app data type lives here: `CalendarEvent`, `ServiceOption`, `ClientDetails`, `ClientSummary`, `DayId`, `DaySchedule`, `Service`, `Product`, `AppointmentLike`, etc.
+- When adding a new type, add it to `types.ts`. Domain files (`events.ts`, `services.ts`, `clients.ts`) and `WorkScheduleContext` re-export from `types.ts` for backward compatibility.
+
+## 2. All mock data in one file
+
+- **File:** `src/data/mockData.ts`
+- Every mock array/object used in the app lives here: `MOCK_EVENTS`, `MOCK_SERVICES`, `SERVICE_CATEGORIES`, `CALENDAR_COLORS`, `MOCK_WORK_SCHEDULE`, `MOCK_CLIENTS`, `MOCK_CLIENT_DETAILS`, etc.
+- When **you** or **AI** add mock data for a feature, add it to `mockData.ts` so the whole app stays consistent and there is no conflict.
+- `mockData.ts` imports types from `types.ts` only (no circular dependency).
+
+## 3. How the rest of the app uses it
+
+- **Types:** Import from `src/data/types.ts` or from domain re-exports (`events.ts`, `services.ts`, `clients.ts`, `WorkScheduleContext`).
+- **Mock data:** Defined in `mockData.ts`; re-exported from domain files for backward compatibility:
+  - `events.ts` re-exports `CalendarEvent` from `types`, `MOCK_EVENTS` from `mockData`
+  - `services.ts` re-exports `ServiceOption`, `PriceType` from `types`, `MOCK_SERVICES`, `SERVICE_CATEGORIES`, `CALENDAR_COLORS` from `mockData`
+  - `clients.ts` re-exports client types from `types`, `MOCK_CLIENTS`, `MOCK_CLIENT_DETAILS` from `mockData`, and keeps `getClientDetailsForAppointment`
+  - `WorkScheduleContext` imports `DayId`, `DaySchedule` from `types`, `MOCK_WORK_SCHEDULE` from `mockData`
+
+## 4. Designing mock so API replacement is easy
+
+- Keep **one shape per concept**: e.g. `CalendarEvent` is the single shape for calendar events everywhere (day view, week view, month view, modals). Do not invent parallel shapes for the same concept.
+- Mock data shape should match what you expect from the backend (same field names and types). When you add an API later, you only swap the source (e.g. `useEvents()` fetches from API instead of reading from `MOCK_EVENTS`); components keep using the same types and props.
+- If a feature needs a new field (e.g. `waitlistAddedAt`), add it to `types.ts` and to the mock in `mockData.ts` so there is no conflict across the app.
+
+## 5. When you go dynamic (backend)
+
+- Replace the **source** of data (context, hook, or screen-level fetch), not the UI contract. Example: `EventsContext` today initializes from `MOCK_EVENTS` and AsyncStorage; later it can initialize from `GET /api/appointments` and still expose `events: CalendarEvent[]`.
+- Map API response to the existing types (e.g. `CalendarEvent`, `ServiceOption`). Keep API-specific types (DTOs) in a single place (e.g. `src/api/` or `src/types/api.ts`) and map to app types at the boundary.
+- One logical resource → one (or a few) endpoints: e.g. appointments/events → `GET/POST /appointments`, work schedule → `GET/PUT /work-schedule`, services → `GET /services`. This avoids conflicting or duplicate sources for the same data.

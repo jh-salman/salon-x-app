@@ -1,0 +1,46 @@
+---
+description: Calendar parked, waitlist, day view and week view behaviour and conventions
+globs: "**/AllDaySection*.tsx,**/CalendarWeekView*.tsx,**/CalendarMiddleSection*.tsx,**/CalendarScreen*.tsx,**/events*.ts"
+alwaysApply: false
+---
+
+# Calendar: Parked, Waitlist, Day View & Week View
+
+Use this rule when changing AllDaySection, week/day views, or event data.
+
+## Parked appointments
+
+- **Color:** Orange (use `colors.event.orange` in AllDaySection).
+- **Location:** Shown in AllDaySection top bar as “Parked” pills; in **day view only**, can be long-pressed and dragged onto the calendar to unpark.
+- **Data:** `CalendarEvent.isParked === true`; when unparked, set `allDay: false` and set `start`/`end` to the dropped slot.
+- **Drag:** Uses `calendarLayout` (top, scrollY) and `DAY_START_HOUR` (6) for y-axis; `SLOT_HEIGHT = 56` must match CalendarMiddleSection. Drop time = `DAY_START_HOUR + slotIndex` with 5‑min snap.
+
+## Waitlist
+
+- **Color:** Green (e.g. `#9DE684` / `colors.event.green`) for pills and indicators.
+- **Data:** `CalendarEvent.waitlistAddedAt?: number | Date` (timestamp when added). Used for sort order and display.
+- **Sort:** Waiting list is shown in **chronological order** (oldest first): sort by `waitlistAddedAt` ascending.
+- **Display:** One person = show name; multiple = show count (e.g. “Waiting (5)”). Each entry shows **date and time** in format: `M/d  HH:mm` (e.g. `3/7  12:31`). Use `format(ts, 'M/d  HH:mm')` in pills and expanded list.
+- **Week view:** Green waitlist indicator dot in day header; tap shows modal “Choose a day to drop an appointment by clicking on it.” No drag-and-drop in week view.
+
+## Day view only: move & unpark
+
+- **Move, unpark, resize, park:** All of these work **only in day view**. In week (and month) view they are disabled.
+- **Day view:** Pass `onParkAppointment`, `onMoveAppointment`, `onResizeAppointment`, `onDragOverParkZone`, `parkZone`, `calendarLayout`, `onUnparkToSlot` so drag-and-drop and unpark from AllDaySection work.
+- **Week view:** Pass `onUnparkToSlot={undefined}`, `calendarLayout={null}`, `parkZone={null}` to AllDaySection so pills and expanded list items are non-draggable; show hint “Switch to Day view to move or place appointments”.
+- **Layout:** Single day; time axis (y-axis) on the left inside CalendarMiddleSection; vertical scroll for time slots.
+- **Slots:** `DAY_START_HOUR = 6`, `DAY_END_HOUR = 23`, `SLOT_HEIGHT = 56` in CalendarMiddleSection; same constants used in AllDaySection for drop position.
+
+## Week view
+
+- **Move/unpark:** Disabled. AllDaySection gets `onUnparkToSlot={undefined}`, `calendarLayout={null}`, `parkZone={null}` so parked/waitlist pills and expanded items are static (no drag, no unpark).
+- **Drag-and-drop (grid):** Disabled. Do **not** pass `onParkAppointment`, `onMoveAppointment`, `onResizeAppointment`, `onDragOverParkZone`, `getTargetDateForDrop`, or `parkZone` to CalendarMiddleSection when `variant="week-column"`.
+- **Navigation:** Tapping a day (header or empty slot) must switch to **day view** and set that date: `setCurrentDate(date); setViewMode('day')`. Header tab must show “Day” active when so switched (controlled via `viewMode` prop on CalendarHeaderDynamic).
+- **Layout:** One shared **time axis (y-axis)** on the left; 5 days visible at a glance; horizontal scroll for day columns; one vertical scroll for time axis + columns so they stay in sync.
+- **Clipping:** Day columns and week-column content use `overflow: 'hidden'` so appointments do not bleed into adjacent columns.
+
+## Shared constants
+
+- `SLOT_HEIGHT = 56` (AllDaySection and CalendarMiddleSection).
+- `DAY_START_HOUR = 6` for slot index → hour mapping in both AllDaySection and CalendarMiddleSection.
+- Waitlist date+time format: **`M/d  HH:mm`** (e.g. `3/7  12:31`).

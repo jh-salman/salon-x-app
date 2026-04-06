@@ -1,0 +1,36 @@
+---
+description: Keep an up-to-date Prisma schema + backend seed plan to make backend implementation fast later.
+globs: "**/*.ts,**/*.tsx"
+alwaysApply: true
+---
+
+# Prisma-first backend planning (Schema + Mock)
+
+When implementing new app features, keep a future backend Prisma schema up to date so backend work is easy later.
+
+## Source of truth files
+
+- **Prisma schema**: `prisma/schema.prisma`
+- **Schema ↔ screen mapping**: `docs/backend/SCHEMA_MAP.md`
+- **UI mock data**: `src/data/mockData.ts` (keep per project rule)
+- **Backend seed plan (future)**: `mock/seed.ts` (mirrors Prisma models; no UI imports)
+
+## Rules
+
+- Every time UI introduces a new domain concept (Client, Appointment, Service, Product, Note, Payment, etc.), update `prisma/schema.prisma`.
+- Keep stable IDs + timestamps on all models: `id`, `createdAt`, `updatedAt`.
+- Store times as `DateTime` (UTC) in the database. Use ISO strings at the app boundary.
+- Use join tables for many-to-many relationships (e.g. appointment services, used products).
+- Prefer normalized relations + **snapshot fields** on join rows:
+  - Example: `nameSnapshot`, `priceSnapshot` so historical visits don’t change when catalog updates.
+- Keep UI types and backend schema aligned:
+  - App types remain in `src/data/types.ts`
+  - UI mocks remain in `src/data/mockData.ts`
+  - Prisma schema lives in `prisma/` and is backend-focused
+
+## Deliverables
+
+- `prisma/schema.prisma` covers the whole app domain A→Z.
+- `docs/backend/SCHEMA_MAP.md` documents screen/module → which tables/fields it needs.
+- `mock/seed.ts` seeds a realistic dataset compatible with the Prisma schema (when backend starts).
+
