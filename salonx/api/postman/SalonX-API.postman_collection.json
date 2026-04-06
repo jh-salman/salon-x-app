@@ -1,0 +1,591 @@
+{
+  "info": {
+    "name": "SalonX API (local)",
+    "description": "**Flow:** `POST /api/v1/auth/signup` → `POST /api/auth/phone-number/send-otp` (dev: copy `otp=` from API log) → `POST /api/auth/phone-number/verify` → copy `token` into collection var `bearerToken`. **Orgs:** `POST /organization/create` returns an org; set `organizationId`. **Salon:** after org sync, call `GET /api/v1/workspace` with `x-salon-id` (use id from response or DB). Use `Origin: {{origin}}` when testing cookies; Bearer works for mobile/Postman.\n\nOrganization routes match Better Auth `organization` plugin (see `better-auth` package). `addMember` may be server-only in some versions—use `invite-member` for normal flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "origin", "value": "http://localhost:4000" },
+    { "key": "phone", "value": "+15551234567" },
+    { "key": "otpCode", "value": "000000" },
+    { "key": "signupEmail", "value": "you@example.com" },
+    { "key": "signupPassword", "value": "password12" },
+    { "key": "signupName", "value": "Test User" },
+    { "key": "bearerToken", "value": "" },
+    { "key": "salonId", "value": "" },
+    { "key": "organizationId", "value": "" },
+    { "key": "invitationId", "value": "" },
+    { "key": "memberId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "GET /health/live",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/live"
+          }
+        },
+        {
+          "name": "GET /health/ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/ready"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Signup (v1), then Better Auth phone OTP for session.",
+      "item": [
+        {
+          "name": "GET /api/v1/auth/mode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/mode"
+          },
+          "description": "Server contract: signup path, OTP, phone rules."
+        },
+        {
+          "name": "POST /api/v1/auth/signup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\",\n  \"phoneNumber\": \"{{phone}}\",\n  \"name\": \"{{signupName}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/signup"
+          },
+          "description": "Creates user + password hash. No session until OTP verify."
+        },
+        {
+          "name": "1. POST send-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phone}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/phone-number/send-otp"
+          },
+          "description": "Registered phone only. Dev: OTP is printed on the server console."
+        },
+        {
+          "name": "2. POST verify — OTP login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{phone}}\",\n  \"code\": \"{{otpCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/phone-number/verify"
+          },
+          "description": "Session + token. Paste `otpCode` from server log after send-otp. Copy `token` into `bearerToken`."
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "item": [
+        {
+          "name": "GET /api/auth/get-session",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Origin", "value": "{{origin}}" }],
+            "url": "{{baseUrl}}/api/auth/get-session"
+          },
+          "description": "Cookie session (browser). For Postman, prefer the Bearer variant."
+        },
+        {
+          "name": "GET /api/auth/get-session (Bearer)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/get-session"
+          },
+          "description": "Same as get-session with `Authorization: Bearer` (bearer plugin)."
+        },
+        {
+          "name": "POST /api/auth/sign-out",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Origin", "value": "{{origin}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/api/auth/sign-out"
+          },
+          "description": "Sign out. Send Bearer if you used token auth."
+        }
+      ]
+    },
+    {
+      "name": "Me (auth)",
+      "description": "Bearer only — no `x-salon-id`. Use `GET /me/salons` to map organizations to `salonId` for tenant calls.",
+      "item": [
+        {
+          "name": "GET /api/v1/me/salons",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/me/salons"
+          },
+          "description": "Salons the user belongs to, with `organizationId` when linked. Copy a `salon.id` into `salonId` for tenant requests."
+        }
+      ]
+    },
+    {
+      "name": "Tenant (x-salon-id)",
+      "description": "Requires Bearer + `x-salon-id` for a salon the user belongs to (from workspace or synced org).",
+      "item": [
+        {
+          "name": "GET /api/v1/workspace",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "x-salon-id", "value": "{{salonId}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/workspace"
+          },
+          "description": "Per-stylist workspace prefs for this salon."
+        },
+        {
+          "name": "PATCH /api/v1/workspace",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "x-salon-id", "value": "{{salonId}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayNameOverride\": \"My workspace label\",\n  \"info\": \"Optional blurb\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/workspace"
+          }
+        },
+        {
+          "name": "GET /api/v1/business",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "x-salon-id", "value": "{{salonId}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/business"
+          }
+        },
+        {
+          "name": "PATCH /api/v1/business (OWNER/ADMIN)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "x-salon-id", "value": "{{salonId}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalName\": \"Studio North LLC\",\n  \"websiteUrl\": \"https://example.com\",\n  \"phone\": \"+15559876543\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/business"
+          }
+        },
+        {
+          "name": "GET /api/v1/appointments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "x-salon-id", "value": "{{salonId}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/appointments?from=2026-01-01&to=2026-12-31&take=100"
+          },
+          "description": "Optional query: `from`, `to` (ISO dates), `take` (1–500). Omit query for defaults."
+        },
+        {
+          "name": "PATCH /api/v1/salon (OWNER/ADMIN — plan)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "x-salon-id", "value": "{{salonId}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"PRO\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/salon"
+          },
+          "description": "`plan`: `FREE` | `PRO`."
+        }
+      ]
+    },
+    {
+      "name": "Organization (Better Auth)",
+      "description": "Base path: `/api/auth/organization/*`. Requires Bearer unless noted. Set `activeOrganizationId` via **set-active** when switching orgs; many calls fall back to active org. Roles: `owner` | `admin` | `member`. Copy `invitationId` from invite response; `memberId` from list-members for role updates.",
+      "item": [
+        {
+          "name": "GET /api/auth/organization/list",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/list"
+          },
+          "description": "Organizations the current user belongs to."
+        },
+        {
+          "name": "POST /api/auth/organization/create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Studio\",\n  \"slug\": \"my-studio-1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/create"
+          },
+          "description": "Creates org + owner membership. Hooks sync `Salon` in this project. Save returned `id` to `organizationId`."
+        },
+        {
+          "name": "POST /api/auth/organization/check-slug",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"my-studio-1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/check-slug"
+          },
+          "description": "Returns `{ status: true }` if slug is free; 400 if taken."
+        },
+        {
+          "name": "GET /api/auth/organization/get-full-organization",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/get-full-organization?organizationId={{organizationId}}"
+          },
+          "description": "Query: `organizationId` or `organizationSlug`; defaults to active org."
+        },
+        {
+          "name": "POST /api/auth/organization/update",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{organizationId}}\",\n  \"data\": {\n    \"name\": \"Renamed Studio\",\n    \"slug\": \"renamed-studio\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/update"
+          },
+          "description": "`data` is partial; omit `organizationId` to use active org."
+        },
+        {
+          "name": "POST /api/auth/organization/delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{organizationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/delete"
+          },
+          "description": "Requires org delete permission (e.g. owner)."
+        },
+        {
+          "name": "POST /api/auth/organization/set-active",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{organizationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/set-active"
+          },
+          "description": "Sets `session.activeOrganizationId`. Use `organizationId: null` to clear."
+        },
+        {
+          "name": "POST /api/auth/organization/has-permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{organizationId}}\",\n  \"permissions\": {\n    \"organization\": [\"update\"]\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/has-permission"
+          },
+          "description": "Checks permission for active or given org. Adjust `permissions` to match BA access statements."
+        },
+        {
+          "name": "GET /api/auth/organization/list-members",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/list-members?organizationId={{organizationId}}"
+          },
+          "description": "Optional: `limit`, `offset`, `organizationSlug`, filters. Defaults to active org."
+        },
+        {
+          "name": "GET /api/auth/organization/get-active-member",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/get-active-member"
+          },
+          "description": "Member row for current user in **active** org."
+        },
+        {
+          "name": "GET /api/auth/organization/get-active-member-role",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/get-active-member-role?organizationId={{organizationId}}"
+          },
+          "description": "Role for current or specified user in org."
+        },
+        {
+          "name": "POST /api/auth/organization/update-member-role",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"role\": \"admin\",\n  \"organizationId\": \"{{organizationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/update-member-role"
+          },
+          "description": "Get `memberId` from list-members."
+        },
+        {
+          "name": "POST /api/auth/organization/remove-member",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberIdOrEmail\": \"member@example.com\",\n  \"organizationId\": \"{{organizationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/remove-member"
+          },
+          "description": "`memberIdOrEmail`: member id or email string."
+        },
+        {
+          "name": "POST /api/auth/organization/leave",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{organizationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/leave"
+          },
+          "description": "Leave org (cannot leave as sole owner)."
+        },
+        {
+          "name": "POST /api/auth/organization/invite-member",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"stylist@example.com\",\n  \"role\": \"member\",\n  \"organizationId\": \"{{organizationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/invite-member"
+          },
+          "description": "Dev: invite URL logged on server. Optional `resend: true`. Active org used if `organizationId` omitted."
+        },
+        {
+          "name": "GET /api/auth/organization/list-invitations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/list-invitations?organizationId={{organizationId}}"
+          },
+          "description": "Pending invites for org (must be a member)."
+        },
+        {
+          "name": "GET /api/auth/organization/list-user-invitations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/list-user-invitations"
+          },
+          "description": "Invitations for the logged-in user's email. Optional `email` for server-side use."
+        },
+        {
+          "name": "GET /api/auth/organization/get-invitation",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/organization/get-invitation?id={{invitationId}}"
+          },
+          "description": "Recipient email must match session user."
+        },
+        {
+          "name": "POST /api/auth/organization/accept-invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationId\": \"{{invitationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/accept-invitation"
+          },
+          "description": "Invitee must be logged in with same email as invitation. Hooks sync `SalonMembership`."
+        },
+        {
+          "name": "POST /api/auth/organization/reject-invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationId\": \"{{invitationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/reject-invitation"
+          }
+        },
+        {
+          "name": "POST /api/auth/organization/cancel-invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Origin", "value": "{{origin}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitationId\": \"{{invitationId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/organization/cancel-invitation"
+          },
+          "description": "Admin/inviter cancel pending invite."
+        }
+      ]
+    }
+  ]
+}

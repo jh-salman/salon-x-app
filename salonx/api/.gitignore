@@ -1,0 +1,15 @@
+/node_modules
+/dist
+/build
+/coverage
+/logs
+/tmp
+/cache
+/test-results
+/test-reports
+/test-coverage
+/test-coverage-report
+.env
+.vercel
+/api/server.mjs
+/api/server.mjs.map
