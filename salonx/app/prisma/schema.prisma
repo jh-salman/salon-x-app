@@ -1,0 +1,648 @@
+// Salon X — Prisma schema (multi-tenant + Better Auth)
+// - Tenant isolation via Salon + salonId on domain tables.
+// - Auth: Better Auth core tables (mapped to default table names: user, session, account, verification).
+// - RLS (PostgreSQL row-level security) is NOT defined here; enforce tenant in API + optional DB policies later.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String
+  emailVerified Boolean  @default(false)
+  image         String?
+  /// Better Auth phone-number plugin (E.164, e.g. +15551234567)
+  phoneNumber          String? @unique
+  phoneNumberVerified  Boolean @default(false)
+  /// Last successful send-otp (60s minimum gap before next send).
+  lastOtpSentAt        DateTime?
+  /// Better Auth two-factor plugin (see `TwoFactor` model)
+  twoFactorEnabled Boolean @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  twoFactor   TwoFactor?
+  memberships SalonMembership[]
+
+  servicesAssigned Service[] @relation("ServiceAssignedUser")
+
+  /// Settings: personal & contact, theme, security (user-scoped)
+  profile                    UserProfile?
+  themePreference            UserThemePreference?
+  securitySettings           UserSecuritySettings?
+  /// My Preferences (notifications) — per salon
+  salonNotificationPrefs     UserSalonNotificationPreference[]
+  /// My Work Schedule — per salon
+  stylistWeeklyAvailability  StylistWeeklyAvailability[]
+  /// My Assigned Services — per salon
+  stylistAssignedServices    StylistAssignedService[]
+  /// Workspace title/info override per salon (mobile workspace setup)
+  salonMemberWorkspaces      SalonMemberWorkspace[]
+  /// Better Auth organization plugin
+  orgMembers                 Member[]
+  orgInvitationsSent         Invitation[] @relation("InvitationInviter")
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Better Auth organization plugin (active workspace)
+  activeOrganizationId String?
+  /// Optional explicit salon tenant; API also resolves salon from active org when unset.
+  activeSalonId String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                   String    @id @default(cuid())
+  accountId            String
+  providerId           String
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken          String?
+  refreshToken         String?
+  idToken              String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                String?
+  password             String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+/// Better Auth two-factor (TOTP / backup codes). Table name must match plugin default `twoFactor`.
+model TwoFactor {
+  id          String @id @default(cuid())
+  secret      String
+  backupCodes String
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("twoFactor")
+}
+
+// =============================================================================
+// Better Auth — organization (tenant for invites / roles). Synced to Salon via hooks.
+// =============================================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  members      Member[]
+  invitations  Invitation[]
+  salons       Salon[]
+
+  @@map("organization")
+}
+
+/// Better Auth organization member (owner / admin / member roles as strings).
+model Member {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+/// Better Auth org invitation (pending / accepted / …).
+model Invitation {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String
+  inviterId      String
+  inviter        User         @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  teamId         String?
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// =============================================================================
+// Multi-tenant core — one Salon has many members, clients, catalog rows, appointments
+// =============================================================================
+
+model Salon {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// When set, this salon is the app tenant for the linked Better Auth organization.
+  organizationId String?       @unique
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  memberships  SalonMembership[]
+  clients      Client[]
+  services     Service[]
+  products     Product[]
+  appointments Appointment[]
+
+  /// Settings: notification prefs, schedule, assigned services, business, team invites
+  notificationPreferences   UserSalonNotificationPreference[]
+  stylistWeeklyAvailability StylistWeeklyAvailability[]
+  stylistAssignedServices   StylistAssignedService[]
+  businessProfile           SalonBusinessProfile?
+  salonMemberWorkspaces     SalonMemberWorkspace[]
+
+  plan SalonPlan @default(FREE)
+}
+
+enum SalonPlan {
+  FREE
+  PRO
+}
+
+enum SalonMembershipRole {
+  OWNER
+  ADMIN
+  STYLIST
+  RECEPTIONIST
+}
+
+/// Many-to-one: many memberships per Salon; many memberships per User (one row per user per salon).
+model SalonMembership {
+  id        String              @id @default(cuid())
+  salonId   String
+  salon     Salon               @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      SalonMembershipRole @default(STYLIST)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([salonId, userId])
+  @@index([userId])
+}
+
+// -----------------------------
+// Core identities (tenant-scoped)
+// -----------------------------
+
+model Client {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  fullName  String
+  phone     String?
+  photoUrl  String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+  clientNotes  ClientNote[]
+
+  @@index([salonId, fullName])
+  @@index([salonId, phone])
+}
+
+model ClientNote {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  body String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, createdAt])
+}
+
+// -----------------------------
+// Catalog (per salon)
+// -----------------------------
+
+model Service {
+  id          String    @id @default(cuid())
+  salonId     String
+  salon       Salon     @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  durationMin Int?
+  priceCents  Int?
+  priceType   PriceType @default(FIXED)
+
+  calendarColor String?
+
+  requireDeposit Boolean @default(false)
+  depositCents   Int?
+
+  /// Optional: stylist primarily offering this service (many services → one user).
+  assignedUserId String?
+  assignedUser   User?   @relation("ServiceAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointmentServices AppointmentService[]
+  stylistAssignments  StylistAssignedService[]
+
+  @@index([salonId, name])
+  @@index([assignedUserId])
+}
+
+enum PriceType {
+  FIXED
+  STARTS_FROM
+  VARIES
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  salonId    String
+  salon      Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  brand      String
+  name       String
+  priceCents Int?
+  imageUrl   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usedInVisits        AppointmentProductUsed[]
+  recommendedInVisits AppointmentProductRecommendation[]
+
+  @@index([salonId, brand])
+  @@index([salonId, name])
+}
+
+// -----------------------------
+// Appointments / visits
+// -----------------------------
+
+model Appointment {
+  id      String @id @default(cuid())
+  salonId String
+  salon   Salon  @relation(fields: [salonId], references: [id], onDelete: Restrict)
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  startAt DateTime
+  endAt   DateTime
+  status  AppointmentStatus @default(BOOKED)
+
+  seriesId String?
+  color    String?
+  isParked Boolean @default(false)
+
+  bookingNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consultation             AppointmentConsultation?
+  services                 AppointmentService[]
+  productsUsed             AppointmentProductUsed[]
+  productRecommendations   AppointmentProductRecommendation[]
+  enhancement              AppointmentEnhancement?
+  nextVisitPlan            AppointmentNextVisitPlan?
+  checkout                 Checkout?
+
+  @@index([salonId, startAt])
+  @@index([clientId, startAt])
+  @@index([status])
+  @@index([seriesId])
+}
+
+enum AppointmentStatus {
+  BOOKED
+  COMPLETED
+  CANCELLED
+  PARKED
+}
+
+model AppointmentConsultation {
+  appointmentId String @id
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  techniqueNotes String[] @default([])
+  personalNotes  String   @default("")
+
+  durationMin Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppointmentService {
+  id            String @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  nameSnapshot       String
+  priceCentsSnapshot Int?
+
+  completed  Boolean @default(false)
+  orderIndex Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([appointmentId, orderIndex])
+  @@index([serviceId])
+}
+
+model AppointmentProductUsed {
+  id            String @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  brandSnapshot      String
+  nameSnapshot       String
+  priceCentsSnapshot Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([appointmentId])
+  @@index([productId])
+}
+
+model AppointmentProductRecommendation {
+  id            String @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  brandSnapshot String?
+  nameSnapshot  String
+  priceCentsSnapshot Int?
+  reason        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([appointmentId])
+  @@index([productId])
+}
+
+model AppointmentEnhancement {
+  appointmentId String @id
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  title               String
+  suggestion          String
+  serviceNameSnapshot String?
+  priceCents          Int?
+  accepted            Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppointmentNextVisitPlan {
+  appointmentId String @id
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  suggestedDate                DateTime?
+  suggestedAfterWeeks          Int?
+  suggestedServiceNameSnapshot String?
+  note                         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------
+// Checkout / payments (future)
+// -----------------------------
+
+model Checkout {
+  id            String @id @default(cuid())
+  appointmentId String @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  subtotalCents Int @default(0)
+  taxCents      Int @default(0)
+  totalCents    Int @default(0)
+  status        CheckoutStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum CheckoutStatus {
+  PENDING
+  PAID
+  VOID
+}
+
+// =============================================================================
+// Settings screen — user-scoped vs salon-scoped (see docs/backend/SETTINGS_SCHEMA.md)
+// =============================================================================
+
+/// Personal & Contact Info — belongs to User only (not tenant).
+model UserProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone        String?
+  /// If different from `User.name` (e.g. legal / booking name)
+  legalName    String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  region       String?
+  postalCode   String?
+  country      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Appearance / Theme — user-scoped (matches mobile ThemeContext primary accent).
+enum ThemePrimaryAccent {
+  PINK
+  BLUE
+  ORANGE
+}
+
+model UserThemePreference {
+  id            String             @id @default(cuid())
+  userId        String             @unique
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryAccent ThemePrimaryAccent @default(PINK)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+/// Security screen — user-scoped. Prefer Better Auth 2FA tables when plugin enabled; this holds app UI flags.
+model UserSecuritySettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  twoFactorEnabled Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/// My Preferences — notifications & calendar sync (per user, per salon).
+model UserSalonNotificationPreference {
+  id                          String   @id @default(cuid())
+  userId                      String
+  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salonId                     String
+  salon                       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  appointmentsNotifications   Boolean  @default(true)
+  clientNotesNotifications    Boolean  @default(true)
+  reviewNotifications         Boolean  @default(true)
+  waitlistNotifications       Boolean  @default(true)
+  calendarSyncEnabled         Boolean  @default(false)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@unique([userId, salonId])
+  @@index([salonId])
+}
+
+/// My Work Schedule — stylist hours per salon (seven rows per user/salon or sparse rows).
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+model StylistWeeklyAvailability {
+  id        String    @id @default(cuid())
+  salonId   String
+  salon     Salon     @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayOfWeek DayOfWeek
+  available Boolean   @default(false)
+  /// Local time strings e.g. "09:00" (salon timezone in `Salon.timezone`)
+  startTime String    @default("09:00")
+  endTime   String    @default("17:00")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([salonId, userId, dayOfWeek])
+  @@index([salonId, userId])
+}
+
+/// My Assigned Services — which catalog services this stylist performs at this salon.
+model StylistAssignedService {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([salonId, userId, serviceId])
+  @@index([salonId, userId])
+}
+
+/// My Business + Website — one row per salon (tenant).
+model SalonBusinessProfile {
+  id           String   @id @default(cuid())
+  salonId      String   @unique
+  salon        Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  legalName    String?
+  taxId        String?
+  phone        String?
+  email        String?
+  websiteUrl   String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  region       String?
+  postalCode   String?
+  country      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Optional workspace label per member (maps mobile workspace setup / tenant display).
+model SalonMemberWorkspace {
+  id                  String   @id @default(cuid())
+  salonId             String
+  salon               Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayNameOverride String?
+  info                String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([salonId, userId])
+  @@index([userId])
+}
+

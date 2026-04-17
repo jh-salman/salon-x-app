@@ -1,0 +1,72 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#FFF8E7", "primaryTextColor": "#1a1a1a", "fontFamily": "ui-sans-serif, system-ui, sans-serif"}}}%%
+flowchart TB
+  subgraph P1["Panel 1 - User journey flow"]
+    direction TB
+    A1(["App launch"]):::entry
+    A2{"Signed in?"}
+    A3(["Workspace and salon"]):::entry
+    A4(["Calendar home"]):::entry
+    A5(["Open appointment"]):::action
+    A6(["Appointment hub"]):::action
+    A7(["Start visit - Pre-consult"]):::action
+    A8{"Before photo OK?"}
+    A9(["Visit plan"]):::action
+    A10(["Next appointment date"]):::action
+    A11(["Checkout and reveal"]):::pay
+    A12(["Care card and star rating"]):::review
+    A13{"Four stars or more?"}
+    A14(["RAMP post - copy"]):::action
+    A15(["Thanks - low rating"]):::outY
+    A16(["Post live - complete"]):::outR
+
+    A1 --> A2
+    A2 -->|no| A2a(["Sign-in or OTP"]):::entry
+    A2a --> A3
+    A2 -->|yes| A3
+    A3 --> A4 --> A5 --> A6 --> A7 --> A8
+    A8 -->|no| A8a(["Retake camera"]):::action
+    A8a --> A8
+    A8 -->|yes| A9 --> A10 --> A11 --> A12 --> A13
+    A13 -->|yes| A14 --> A16
+    A13 -->|no| A15
+  end
+
+  subgraph P2["Panel 2 - Technical flow"]
+    direction TB
+    T0["Bearer token plus x-salon-id on /api/v1"]
+    T1["GET /api/v1/sessions/{id} getGhostNotesSession"]
+    T2["POST /api/v1/uploads and PATCH appointment media"]
+    T3["Local state useVisitPlanStorage"]
+    T4["Local state useNextAppointmentStorage"]
+    T5["POST care-card rating submitCareRating"]
+    T6{"Four stars or more?"}
+    T7["POST ramp-post build and ramp-post copied"]
+    T8["POST flow reset resetAppointmentFlowDemo"]
+
+    T0 --> T1 --> T2 --> T3 --> T4 --> T5 --> T6
+    T6 -->|yes| T7 --> T8
+    T6 -->|no| T5b["Terminal - client-side thanks only"]
+  end
+
+  subgraph P3["Panel 3 - UI wireframe flow"]
+    direction LR
+    W1["Cal - grid, tap appt"]
+    W2["Hub - Start Visit CTA"]
+    W3["Pre - Camera and Ghost Notes"]
+    W4["Plan - toggles, Book Next"]
+    W5["Next - month, Checkout btn"]
+    W6["Checkout - ticket, After, Finish"]
+    W7["Care - bubble, stars"]
+    W8["RAMP - Build and Copy"]
+    W9["Live - check, Run again"]
+    Wlog["Activity log - steps and API chips"]
+
+    W1 --> W2 --> W3 --> W4 --> W5 --> W6 --> W7 --> W8 --> W9 --> Wlog
+  end
+
+  classDef entry fill:#FF9800,stroke:#E65100,color:#111
+  classDef action fill:#43A047,stroke:#2E7D32,color:#fff
+  classDef pay fill:#8E24AA,stroke:#4A148C,color:#fff
+  classDef review fill:#1E88E5,stroke:#0D47A1,color:#fff
+  classDef outY fill:#FBC02D,stroke:#F9A825,color:#111
+  classDef outR fill:#E53935,stroke:#B71C1C,color:#fff

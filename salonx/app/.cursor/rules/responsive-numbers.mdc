@@ -1,0 +1,73 @@
+---
+description: Enforce responsive styling with ms/vs/moderateScale/wp/hp; no raw numbers
+globs: "**/*.tsx,**/*.ts"
+alwaysApply: true
+---
+
+# Responsive Styling Rules (ms / vs)
+
+All numeric values in styles must be responsive. Do not use raw numbers like `10`, `44`, `-6`, `14`.
+
+## Required import (match this project)
+
+```ts
+import { ms, vs, wp, hp, RFValue, scale } from '../utils/responsive';
+```
+
+In this repo, `ms()` is already `moderateScale()` and `vs()` is `verticalScale()`. Prefer using `ms`/`vs` directly.
+
+## Core mapping
+
+- `ms(n)` -> horizontal values
+- `vs(n)` -> vertical values
+- `ms(n)` -> font sizes (preferred)
+- `wp(x)` -> width percent layout
+- `hp(x)` -> height percent layout
+
+### Horizontal -> `ms()`
+- `paddingLeft`, `paddingRight`, `paddingHorizontal`
+- `marginLeft`, `marginRight`, `marginHorizontal`
+- `left`, `right`
+- `borderRadius`
+- small widths / icon sizes
+
+### Vertical -> `vs()`
+- `paddingTop`, `paddingBottom`, `paddingVertical`
+- `marginTop`, `marginBottom`, `marginVertical`
+- `top`, `bottom`
+- fixed component heights
+
+### Fonts -> `moderateScale()`
+Use only:
+
+```ts
+fontSize: ms(14)
+```
+
+`RFValue()` is allowed when matching existing code patterns, but prefer `ms()` for new code.
+
+### Width / Height percentages
+Use:
+
+```ts
+width: wp(90)
+height: hp(30)
+```
+
+## Strict rules
+
+- Never use raw style numbers (except `flex`, `zIndex`, and fontWeight numeric values).
+- Use responsive negatives, e.g. `marginTop: -vs(6)`, `left: -ms(4)`.
+- Keep border radii responsive: `borderRadius: ms(8)` or `ms(999)`.
+
+## Layout guidance
+
+- Prefer Flexbox.
+- Avoid unnecessary absolute positioning.
+- Use absolute only for overlays, floating controls, or badge-like elements.
+
+## Quality guidance
+
+- Prefer `StyleSheet.create()`.
+- Avoid non-trivial inline style objects.
+- Keep style keys reusable and grouped by section.
