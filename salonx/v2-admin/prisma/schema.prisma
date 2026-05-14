@@ -1,0 +1,24 @@
+// Salon X v2-admin — persisted build station config (optional when DATABASE_URL is set).
+
+generator client {
+  provider      = "prisma-client-js"
+  /// Vercel serverless runs Linux + OpenSSL 3 — include engine for that target.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Single-tenant row: full `SalonxV2AdminConfig` JSON.
+model SalonxBuildConfig {
+  id        String   @id @default("default")
+  /// `SalonxV2AdminConfig` as stored JSON (draft; Build Station edits).
+  payload   Json
+  updatedAt DateTime @updatedAt
+  /// Bumped when `publishToApp` is true; salonx-web-v2 `forWeb=1` follows draft `updatedAt` as `_meta.configRevision`.
+  webProjectionAt DateTime @default(now())
+  /// Last published snapshot for salonx-web-v2 (`GET /api/config?forWeb=1`). Same shape as `payload`.
+  publishedPayload Json?
+}

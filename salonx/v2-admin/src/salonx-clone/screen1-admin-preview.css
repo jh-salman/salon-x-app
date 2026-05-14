@@ -1,0 +1,26 @@
+/* Admin-only: clone has no bottom toolbar — grow scroll column to the bottom of the 852px frame */
+.screen1-container--demoImage.screen1-container--adminPreview .client-list-wrapper {
+  height: 566px;
+}
+
+/*
+ * Build Station / iframe preview: `screen1.css` forces `object-fit: cover` on slot images, which
+ * overrides React inline `objectFit` in some engines and breaks Position & zoom after Apply.
+ * Drive fit from `--s1-slot-fit` set on `.s1demo-slot__imgLayer` in `SalonxScreen1DemoClone`.
+ */
+.screen1-container--demoImage.screen1-container--adminPreview .s1demo-slot__imgLayer img,
+.screen1-container--demoImage.screen1-container--adminPreview .s1demo-slot__imgLayer video {
+  object-fit: var(--s1-slot-fit, cover);
+}
+
+/* Build Station embed: slots forward clicks to parent for upload / Position & zoom */
+.screen1-container--demoImage.screen1-container--adminPreview .s1demo-slot--embedInteractive {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.screen1-container--demoImage.screen1-container--adminPreview
+  .s1demo-slot--embedInteractive:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.85);
+  outline-offset: 2px;
+}

@@ -1,0 +1,13 @@
+# Keep `vercel` CLI uploads small — same idea as .gitignore.
+node_modules
+.next
+out
+build
+coverage
+.git
+*.log
+.DS_Store
+.env
+.env.*
+data/config.json
+public/uploads

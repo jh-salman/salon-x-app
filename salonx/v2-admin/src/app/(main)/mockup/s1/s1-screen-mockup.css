@@ -1,0 +1,239 @@
+/**
+ * Ported from salonx-web-v2 `screen1.css` — Screen 1 shell only.
+ * Scoped so it does not leak into the rest of v2-admin.
+ */
+.s1-mockup-scope {
+  --salonx-primary: #3b82f6;
+  --salonx-primary-rgb: 59, 130, 246;
+  --salonx-primary-soft-rgb: 147, 186, 252;
+  --salonx-primary-dark-rgb: 37, 99, 235;
+}
+
+.s1-mockup-scope .date-screen1 {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  cursor: default;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: right;
+  color: #fff;
+}
+
+.s1-mockup-scope .screen1-container {
+  position: relative;
+  height: 100%;
+  width: 393px;
+}
+
+.s1-mockup-scope .layout-wrapper {
+  position: relative;
+  z-index: 100;
+}
+
+.s1-mockup-scope .screen1-background {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 393px;
+  height: 852px;
+  min-height: 852px;
+  background: black;
+  z-index: 10;
+  overflow: visible;
+  --s1-bg-w: 393px;
+  --s1-bg-h: 852px;
+  --s1-curve-top: -5px;
+  --s1-curve-right: -5px;
+  --s1-curve-w: 65px;
+  --s1-curve-h: var(--s1-bg-h);
+  --s1-mask-w: calc(var(--s1-bg-w) + 5px);
+  --s1-mask-cut-x: calc(var(--s1-bg-w) - var(--s1-curve-w) + 5px);
+}
+
+.s1-mockup-scope .curvedline-container {
+  position: absolute;
+  top: var(--s1-curve-top);
+  right: var(--s1-curve-right);
+  width: var(--s1-curve-w);
+  height: 100%;
+  z-index: 55;
+  pointer-events: none;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.s1-mockup-scope .profile-panel {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  width: 380px;
+  height: 203px;
+  z-index: 2;
+  transition: transform 0.5s ease;
+}
+
+.s1-mockup-scope .topstats-panel {
+  position: absolute;
+  top: 0;
+  left: 5px;
+  width: 380px;
+  height: 203px;
+  z-index: 1;
+}
+
+.s1-mockup-scope .company-header {
+  --s1-mask-w: calc(var(--s1-bg-w, 393px) + 5px);
+  --s1-curve-h: var(--s1-bg-h, 852px);
+  --s1-panel-left: 5px;
+  --s1-panel-top: 208px;
+  width: 395px;
+  height: 70px;
+  top: var(--s1-panel-top);
+  position: absolute;
+  left: var(--s1-panel-left);
+  box-sizing: border-box;
+  -webkit-mask-image: url(/curve-mask.svg);
+  mask-image: url(/curve-mask.svg);
+  -webkit-mask-size: var(--s1-mask-w) var(--s1-curve-h);
+  mask-size: var(--s1-mask-w) var(--s1-curve-h);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: calc(-1 * var(--s1-panel-left))
+    calc(var(--s1-curve-top) - var(--s1-panel-top));
+  mask-position: calc(-1 * var(--s1-panel-left))
+    calc(var(--s1-curve-top) - var(--s1-panel-top));
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  isolation: isolate;
+}
+
+.s1-mockup-scope .client-list-wrapper {
+  --s1-mask-w: calc(var(--s1-bg-w, 393px) + 5px);
+  --s1-curve-h: var(--s1-bg-h, 852px);
+  --s1-panel-left: 5px;
+  --s1-panel-top: 286px;
+  width: 395px;
+  height: 504px;
+  top: var(--s1-panel-top);
+  position: absolute;
+  left: var(--s1-panel-left);
+  transition: transform 0.5s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: url(/curve-mask.svg);
+  mask-image: url(/curve-mask.svg);
+  -webkit-mask-size: var(--s1-mask-w) var(--s1-curve-h);
+  mask-size: var(--s1-mask-w) var(--s1-curve-h);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: calc(-1 * var(--s1-panel-left))
+    calc(var(--s1-curve-top) - var(--s1-panel-top));
+  mask-position: calc(-1 * var(--s1-panel-left))
+    calc(var(--s1-curve-top) - var(--s1-panel-top));
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  isolation: isolate;
+}
+
+.s1-mockup-scope .client-list-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.s1-mockup-scope .timer-panel {
+  --s1-mask-w: calc(var(--s1-bg-w, 393px) + 5px);
+  --s1-curve-h: var(--s1-bg-h, 852px);
+  --s1-panel-left: 5px;
+  --s1-panel-top: 286px;
+  position: absolute;
+  top: var(--s1-panel-top);
+  left: var(--s1-panel-left);
+  width: 380px;
+  height: 384px;
+  z-index: 2;
+  transition: transform 0.5s ease;
+  -webkit-mask-image: url(/curve-mask.svg);
+  mask-image: url(/curve-mask.svg);
+  -webkit-mask-size: var(--s1-mask-w) var(--s1-curve-h);
+  mask-size: var(--s1-mask-w) var(--s1-curve-h);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: calc(-1 * var(--s1-panel-left))
+    calc(var(--s1-curve-top) - var(--s1-panel-top));
+  mask-position: calc(-1 * var(--s1-panel-left))
+    calc(var(--s1-curve-top) - var(--s1-panel-top));
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  isolation: isolate;
+}
+
+.s1-mockup-scope .screen1-toolbar {
+  position: absolute;
+  top: 790px;
+  left: 0;
+  width: 393px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 14px;
+  background: #0e0e10;
+  border-top: 1px solid #2b2b2b;
+  z-index: 60;
+  box-sizing: border-box;
+}
+
+.s1-mockup-scope .screen1-toolbar__btn {
+  background: transparent;
+  border: none;
+  cursor: default;
+  color: var(--salonx-primary);
+  opacity: 0.48;
+  padding: 6px 9px;
+  transition: opacity 120ms;
+  line-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.s1-mockup-scope .screen1-toolbar__btn svg {
+  display: block;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.s1-mockup-scope .screen1-toolbar__btn--solid {
+  opacity: 1;
+  filter: drop-shadow(0 0 10px rgba(var(--salonx-primary-rgb), 0.35));
+}
+
+.s1-mockup-scope .screen1-blackBelow {
+  position: relative;
+  width: 100%;
+  height: 852px;
+  background: black;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.s1-mockup-scope .screen1-modal-root {
+  position: absolute;
+  inset: 0;
+  z-index: 250;
+  pointer-events: none;
+}
+
+.s1-mockup-scope .curvedline-svg {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}

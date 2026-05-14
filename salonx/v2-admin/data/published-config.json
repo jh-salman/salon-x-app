@@ -1,0 +1,252 @@
+{
+  "version": 2,
+  "activeBrandId": "default",
+  "brands": [
+    {
+      "id": "default",
+      "name": "Danger jone",
+      "primaryHex": "#3b82f6",
+      "s1Demo": {
+        "images": {
+          "topBar": "",
+          "hero": "",
+          "promo": "",
+          "curveStrip": "http://localhost:3000/uploads/0a10ae3f-3b13-4d9f-ba45-57888c39e642.jpg"
+        },
+        "adjust": {
+          "topBar": {
+            "scale": 49.65,
+            "rotate": -64,
+            "tx": -16,
+            "ty": 33,
+            "fit": "contain"
+          },
+          "hero": {
+            "scale": 1,
+            "rotate": 0,
+            "tx": 0,
+            "ty": 0,
+            "fit": "contain"
+          },
+          "promo": {
+            "scale": 1,
+            "rotate": 0,
+            "tx": 0,
+            "ty": 0,
+            "fit": "contain"
+          },
+          "curveStrip": {
+            "scale": 0.35,
+            "rotate": 0,
+            "tx": 0,
+            "ty": 0,
+            "fit": "contain"
+          }
+        }
+      },
+      "s2": {
+        "image": "http://localhost:3000/uploads/281dce03-dae5-43c8-a152-095eb9e7d42d.mp4",
+        "adjust": {
+          "scale": 1,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "video"
+      },
+      "s4": {
+        "image": "",
+        "adjust": {
+          "scale": 1,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "s5": {
+        "image": "",
+        "adjust": {
+          "scale": 1,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "screenLocks": {
+        "s1": false,
+        "s2": false,
+        "s4": false,
+        "s5": false
+      }
+    },
+    {
+      "id": "8ae89d99-b398-4a8d-89c5-688f73a24521",
+      "name": "Brand 2",
+      "primaryHex": "#3b82f6",
+      "s1Demo": {
+        "images": {
+          "topBar": "http://localhost:3000/uploads/7d54d5b7-4746-49c1-854c-94edc0aff0c4.jpg",
+          "hero": "http://localhost:3000/uploads/d64f82b2-f5b9-46fe-8c06-76b2dfff56c6.jpg",
+          "promo": "http://localhost:3000/uploads/0781da51-5bd9-432b-aa84-6b6f60ddacc4.jpg",
+          "curveStrip": "http://localhost:3000/uploads/ce85e182-a1ba-447d-9fcd-75ac81745644.jpg"
+        },
+        "adjust": {
+          "topBar": {
+            "scale": 0.92,
+            "rotate": 0,
+            "tx": 0.16117475468757797,
+            "ty": -3.3560931122448983,
+            "fit": "contain"
+          },
+          "hero": {
+            "scale": 1,
+            "rotate": 0,
+            "tx": -0.13087970916146166,
+            "ty": -1.7842156990780864,
+            "fit": "contain"
+          },
+          "promo": {
+            "scale": 1,
+            "rotate": 0,
+            "tx": 0.07119850497840581,
+            "ty": -5.765014815976837,
+            "fit": "contain"
+          },
+          "curveStrip": {
+            "scale": 1,
+            "rotate": 0,
+            "tx": 0,
+            "ty": 0,
+            "fit": "contain"
+          }
+        }
+      },
+      "s2": {
+        "image": "http://localhost:3000/uploads/f8909232-474e-4472-b693-ed5970cbd62f.jpg",
+        "adjust": {
+          "scale": 1,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "s4": {
+        "image": "",
+        "adjust": {
+          "scale": 1,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "s5": {
+        "image": "",
+        "adjust": {
+          "scale": 1,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "screenLocks": {
+        "s1": true,
+        "s2": false,
+        "s4": false,
+        "s5": false
+      }
+    },
+    {
+      "id": "6cfed0dc-d85c-4348-8ee9-cd5f1a5bf6d2",
+      "name": "Salonx",
+      "primaryHex": "#3b82f6",
+      "s1Demo": {
+        "images": {
+          "topBar": "http://localhost:3000/uploads/bd09f17c-c8a9-4375-b104-23d80b022297.jpg",
+          "hero": "http://localhost:3000/uploads/7fbc6827-d110-4711-8639-dd690a0cd4ff.jpg",
+          "promo": "http://localhost:3000/uploads/e9979f32-4f27-466b-87db-9018b7c4c998.jpg",
+          "curveStrip": "http://localhost:3000/uploads/00116cbb-d6b7-4346-bba7-88a9ccf6cff0.jpg"
+        },
+        "adjust": {
+          "topBar": {
+            "scale": 19.952637080000002,
+            "rotate": 0,
+            "tx": 8.030015489177176,
+            "ty": -25.81310204081633,
+            "fit": "contain"
+          },
+          "hero": {
+            "scale": 10.42975388,
+            "rotate": 0,
+            "tx": 0,
+            "ty": 0,
+            "fit": "contain"
+          },
+          "promo": {
+            "scale": 10.386432,
+            "rotate": 0,
+            "tx": 0,
+            "ty": -10.709386953522808,
+            "fit": "contain"
+          },
+          "curveStrip": {
+            "scale": 4.01096448,
+            "rotate": 0,
+            "tx": 1.1018833644956398,
+            "ty": -12.084373168945312,
+            "fit": "contain"
+          }
+        }
+      },
+      "s2": {
+        "image": "http://localhost:3000/uploads/2937938b-1e33-4274-a149-b7d6a05dc347.jpg",
+        "adjust": {
+          "scale": 2.5290468799999997,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "s4": {
+        "image": "http://localhost:3000/uploads/66f51cb8-0614-4303-b4bd-3d4ea432dd98.jpg",
+        "adjust": {
+          "scale": 2.55657788,
+          "rotate": 0,
+          "tx": 0,
+          "ty": 0,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "s5": {
+        "image": "http://localhost:3000/uploads/fdc40fe4-ba4e-417b-bf20-bf9251cd92b3.jpg",
+        "adjust": {
+          "scale": 1.9907337200000002,
+          "rotate": 0,
+          "tx": 0.33941073606073585,
+          "ty": 0.9737493896484387,
+          "fit": "contain"
+        },
+        "mediaKind": "image"
+      },
+      "screenLocks": {
+        "s1": false,
+        "s2": false,
+        "s4": false,
+        "s5": false
+      }
+    }
+  ]
+}
